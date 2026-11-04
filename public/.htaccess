@@ -1,0 +1,20 @@
+DirectoryIndex index.html index.php
+ErrorDocument 404 /404.html
+Options -Indexes
+AddDefaultCharset utf-8
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^www\.salespeak\.ru$ [NC]
+RewriteRule ^(.*)$ https://salespeak.ru/$1 [R=301,L]
+RewriteRule ^(_app|_data)(/|$) - [F,L]
+RewriteRule ^api/lead/?$ api/lead.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+<FilesMatch "\.(woff2|webp|jpg|svg|css|js)$">
+Header set Cache-Control "public, max-age=604800"
+</FilesMatch>
+</IfModule>

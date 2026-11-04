@@ -2,3 +2,5 @@ preview/
 __pycache__/
 *.sqlite3
 .env
+public/_app/setup-token.txt
+public/_data/

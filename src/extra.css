@@ -102,3 +102,5 @@ div.case{cursor:default}div.case:hover{transform:none}
 }
 h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
 .page-hero h1{font-size:clamp(24px,6.6vw,56px)}
+.form-kz{padding:16px 18px;border-radius:var(--r);background:var(--ok-bg);color:var(--ok-fg);display:grid;gap:6px;font-size:15px}
+.form-kz a{color:var(--violet);font-weight:700}

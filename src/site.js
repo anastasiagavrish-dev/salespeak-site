@@ -106,6 +106,9 @@
     setErr(countryBox.querySelector('input'), needC ? 'Выберите страну, чтобы заявка сохранилась по законам вашей страны' : '');
     if (!(a && b && c) || needC) { var bad = form.querySelector('.field.bad input, .field.bad textarea'); if (bad) bad.focus(); return; }
 
+    var kzBox = $('.form-kz');
+    if (cn === 'kz' && !kzApi && !preview) { kzBox.hidden = false; kzBox.scrollIntoView({ block: 'nearest' }); goal('kz_messenger'); return; }
+    if (kzBox) kzBox.hidden = true;
     btn.disabled = true; var label = btn.textContent; btn.textContent = 'Отправляем…';
     var data = { name: nameI.value.trim(), contact: contactI.value.trim(), pain: $('[name=pain]').value.trim(), country: cn,
       consent_pd: true, consent_ads: adsI.checked, website: $('[name=website]').value, page: location.pathname };

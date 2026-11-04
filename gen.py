@@ -10,7 +10,7 @@ PREVIEW = len(sys.argv) > 1 and sys.argv[1] == "preview"
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "preview" if PREVIEW else "public")
 SITE = "https://salespeak.ru"
-KZ_API = "https://kz.salespeak.ru/api/lead"
+KZ_API = ""  # адрес приема заявок в Казахстане, когда появится хостинг в РК
 METRIKA_ID = ""  # номер счетчика Яндекс Метрики – подставить при запуске
 CONSENT_VERSION = "2026-11-03"
 E = html.escape
@@ -71,6 +71,7 @@ def lead_form(fid="lead"):
 <label class="check" for="{fid}-ads"><input type="checkbox" id="{fid}-ads" name="consent_ads"><span>Хочу получать полезные материалы и анонсы, <a href="{u('soglasie-reklama/')}">согласие на рассылку</a> <span class="opt">необязательно</span></span></label>
 <button class="btn btn-wide" type="submit">Хочу разбор переписок</button>
 <p class="form-err" role="alert" hidden></p>
+<div class="form-kz" hidden><b>Для заявок из Казахстана пока работает мессенджер</b><p>Напишите мне в <a href="{TG}">Telegram</a> или <a href="{WA}">WhatsApp</a> – отвечу там и договоримся о разборе.</p></div>
 <div class="form-ok" hidden tabindex="-1"><b>Заявка принята</b><p>Напишу вам в течение рабочего дня и договоримся о времени созвона.</p></div>
 </form>"""
 
@@ -429,6 +430,8 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     build_assets()
+    if not PREVIEW:
+        shutil.copytree(os.path.join(ROOT, 'php'), OUT, dirs_exist_ok=True)
     home(); services_hub()
     for s in SERVICES:
         service_page(s)
