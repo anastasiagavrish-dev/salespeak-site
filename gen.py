@@ -49,7 +49,7 @@ def header(offer_href):
 
 def footer():
     return f"""<footer class="foot"><div class="wrap foot-in">
-<div><b>Анастасия Гавриш</b><p>Эксперт по продажам, Алматы</p><p class="foot-small">Telegram <a href="{TG}">@gavrish_anastasiya</a><br>WhatsApp <span class="sel">{PHONE_TXT}</span></p></div>
+<div><b>Анастасия Гавриш</b><p>Эксперт по продажам, Алматы</p><p class="foot-small">Telegram <a href="{TG}">@gavrish_anastasiya</a><br>WhatsApp <span class="sel">{PHONE_TXT}</span></p><p class="foot-small">Каналы в Telegram<br><a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a><br><a href="https://t.me/razborprodaj">«Разборы продаж»</a></p></div>
 <nav aria-label="Разделы сайта">{''.join(f'<a href="{u(p)}">{t}</a>' for p, t in NAV)}</nav>
 <nav aria-label="Документы"><a href="{u('privacy/')}">Политика конфиденциальности</a><a href="{u('soglasie/')}">Согласие на обработку данных</a><a href="{u('soglasie-reklama/')}">Согласие на рекламные рассылки</a><button class="linklike" type="button" data-cookie-settings>Настройки cookie</button></nav>
 </div></footer>
@@ -93,7 +93,7 @@ def breadcrumbs(items):
 
 
 PERSON = {"@type": "Person", "@id": SITE + "/#person", "name": "Анастасия Гавриш", "jobTitle": "Эксперт по продажам",
-          "url": SITE + "/", "sameAs": ["https://www.instagram.com/an.gavrish/", TG],
+          "url": SITE + "/", "sameAs": ["https://www.instagram.com/an.gavrish/", TG, "https://t.me/sdelkazasdelkoi", "https://t.me/razborprodaj"],
           "address": {"@type": "PostalAddress", "addressLocality": "Алматы", "addressCountry": "KZ"},
           "alumniOf": ["МГТУ им. Н. Э. Баумана", "Московская школа кино"],
           "knowsAbout": ["Аудит отдела продаж", "Скрипты продаж", "Построение отдела продаж", "Тренинги по продажам", "Продажи в переписке", "Холодные продажи B2B"]}
@@ -332,6 +332,7 @@ def about_page():
 <h2>Образование</h2><p>МГТУ им. Баумана и Московская школа кино. Училась продажам у Михаила Уколова (SOHO MBA), Настасьи Белочкиной и Виталия Говорухина.</p>
 <h2>Немного биографии</h2><p>Родилась в Алматы, уехала учиться в Москву и 15 лет прожила там. С 2018 года живу и работаю в Алматы. Помимо продаж у меня есть дизайнерское агентство, которое делает постеры для кино.</p>
 <h2>Увлечения</h2><p>Танцую джаз-фанк и хип-хоп, хожу в тренажерный зал, читаю все книги про продажи, до которых могу дотянуться. Люблю покупать недвижимость и путешествовать.</p>
+<h2>Мои каналы</h2><p>В Telegram веду два канала – <a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a> и <a href="https://t.me/razborprodaj">«Разборы продаж»</a>. Подписывайтесь.</p>
 </div></section>{offer_block()}"""
     layout("about/", "Обо мне – Анастасия Гавриш, эксперт по продажам",
            "Анастасия Гавриш – эксперт по продажам с 2010 года, 200 млн тенге личных B2B-продаж за 2024 год, 7 лет в кино, МГТУ им. Баумана. Алматы.", body, [cld, {"@context": "https://schema.org", **PERSON}])
@@ -343,7 +344,7 @@ def blog_page():
     crumbs, cld = breadcrumbs([("blog/", "Блог")])
     body = f"""{crumbs}<section class="page-hero"><div class="wrap"><p class="eyebrow">Блог</p><h1>Разборы и статьи о продажах</h1>
 <p class="lead">Здесь будут разборы реальных переписок, ответы на возражения и статьи о том, как устроить отдел продаж.</p></div></section>
-<section class="blog-empty"><div class="wrap"><div class="empty-card"><h2>Первые статьи готовятся</h2><p>Пока можно почитать <a href="{u('cases/')}">кейсы</a> или подписаться на мой <a href="{TG}">Telegram</a>.</p></div></div></section>"""
+<section class="blog-empty"><div class="wrap"><div class="empty-card"><h2>Первые статьи готовятся</h2><p>Пока можно почитать <a href="{u('cases/')}">кейсы</a> или подписаться на мои Telegram-каналы <a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a> и <a href="https://t.me/razborprodaj">«Разборы продаж»</a>.</p></div></div></section>"""
     layout("blog/", "Блог о продажах", "Статьи и разборы о продажах, скриптах, возражениях и построении отдела продаж от Анастасии Гавриш.", body, cld)
 
 
@@ -415,7 +416,7 @@ def build_assets():
         for w in ws:
             for sub, rng in ranges.items():
                 fn = f"{d}-{sub}-{w}-normal.woff2"
-                shutil.copy(F + d + "/files/" + fn, os.path.join(ad, "fonts", fn))
+                shutil.copy(os.path.join(ROOT, "src", "fonts", fn), os.path.join(ad, "fonts", fn))
                 css.append(f'@font-face{{font-family:"{fam}";font-style:normal;font-weight:{w};font-display:swap;src:url(fonts/{fn}) format("woff2");unicode-range:{rng}}}')
     open(os.path.join(ad, "fonts.css"), "w").write("\n".join(css))
     shutil.copy(os.path.join(ROOT, "src", "site.css"), os.path.join(ad, "site.css"))
