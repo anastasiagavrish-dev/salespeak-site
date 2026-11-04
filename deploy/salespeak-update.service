@@ -1,0 +1,6 @@
+[Unit]
+Description=salespeak.ru – забрать обновления с GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/salespeak-update
