@@ -351,3 +351,8 @@ h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
 .page-hero h1{font-size:clamp(24px,6.6vw,56px)}
 .form-kz{padding:16px 18px;border-radius:var(--r);background:var(--ok-bg);color:var(--ok-fg);display:grid;gap:6px;font-size:15px}
 .form-kz a{color:var(--violet);font-weight:700}
+/* фото со сцены вместо вырезанного портрета */
+.hero-photo{background:none!important;padding:0!important;isolation:isolate}
+.hero-photo img{border-radius:var(--r);aspect-ratio:4/5;object-fit:cover;width:100%;height:auto}
+.hero-photo::before{content:"";position:absolute;inset:18px -18px -18px 18px;background:var(--lime);border-radius:var(--r);z-index:-1}
+@media (max-width:860px){.hero-photo::before{inset:12px -12px -12px 12px}}

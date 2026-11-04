@@ -162,7 +162,7 @@ def home():
 <h1>Найду, где ваш отдел продаж <mark>теряет деньги</mark>, и исправлю это</h1>
 <p class="lead">Аудит, скрипты, обучение и построение отдела продаж. 16 лет в продажах, работаю с бизнесом в России, Казахстане и везде, где продают на русском.</p>
 <div class="hero-cta"><a class="btn" href="#offer">Хочу разбор переписок</a><span class="msgr">или напишите в <a href="{TG}">Telegram</a> и <a href="{WA}">WhatsApp</a></span></div></div>
-<figure class="hero-photo"><img src="{a('img/hero.webp')}" width="380" height="444" alt="Анастасия Гавриш, эксперт по продажам" fetchpriority="high"><figcaption><b>Анастасия Гавриш</b><span>эксперт по продажам</span></figcaption></figure>
+<figure class="hero-photo"><img src="{a('img/hero.webp')}" width="760" height="950" alt="Анастасия Гавриш, эксперт по продажам" fetchpriority="high"><figcaption><b>Анастасия Гавриш</b><span>эксперт по продажам</span></figcaption></figure>
 </div></section>
 <section class="facts" aria-label="Цифры"><div class="wrap"><ul class="facts-list">
 <li><b>16+</b><span>лет в продажах и маркетинге</span></li><li><b>200 млн ₸</b><span>личных B2B-продаж за 2024 год</span></li><li><b>10</b><span>проектов, разобранных в кейсах</span></li></ul>
@@ -325,7 +325,7 @@ def about_page():
     body = f"""{crumbs}<section class="page-hero"><div class="wrap about-hero"><div><p class="eyebrow">Обо мне</p><h1>Анастасия Гавриш</h1>
 <p class="lead">Эксперт по продажам, в маркетинге и продажах с 2010 года. Помогаю собственникам растить компании через обучение отделов продаж и разработку скриптов. Люблю разбирать продажи до костей и находить точки роста.</p>
 <div class="hero-cta"><a class="btn" href="#offer">Хочу разбор переписок</a></div></div>
-<figure class="hero-photo"><img src="{a('img/hero.webp')}" width="380" height="444" alt="Анастасия Гавриш"></figure></div></section>
+<figure class="hero-photo"><img src="{a('img/hero.webp')}" width="760" height="950" alt="Анастасия Гавриш"></figure></div></section>
 <section class="prose-sec"><div class="wrap prose">
 <h2>Люблю и умею продавать</h2><p>Только в 2024 году сделала личных продаж в B2B-сегменте больше чем на 200 миллионов тенге. Продаю сама и в холодную – нахожу людей, которые принимают решения в крупных компаниях, и довожу до сделки.</p>
 <h2>Карьера в кино</h2><p>7 лет работала кинопродюсером. Сняла 4 полнометражных фильма и 1 сериал, продавала фильмы в прокат в 11 стран, управляла двумя киностудиями в Москве. Привлекла больше 500 миллионов рублей в Фонде кино и Министерстве культуры РФ на производство фильмов своих студий и сторонних продюсеров.</p>
@@ -444,7 +444,7 @@ def main():
         urls = "".join(f"<url><loc>{SITE}/{p}</loc></url>" for p in SITEMAP)
         open(os.path.join(OUT, "sitemap.xml"), "w").write(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
         import datetime
-        open(os.path.join(OUT, "build.txt"), "w").write(datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
+        open(os.path.join(OUT, "build.txt"), "w").write(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
         open(os.path.join(OUT, "robots.txt"), "w").write(f"User-agent: *\nDisallow: /admin\nDisallow: /api/\nSitemap: {SITE}/sitemap.xml\n")
     print("pages:", len(SITEMAP), "→", OUT)
 
