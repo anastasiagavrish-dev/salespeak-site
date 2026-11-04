@@ -30,8 +30,13 @@ def u(path):
 
 
 def a(path):
-    """Ссылка на файл из assets."""
-    return ("../" * _cur.count("/") if PREVIEW else "/") + "assets/" + path
+    """Ссылка на файл из assets, с меткой версии – браузер берет новый файл после каждого изменения."""
+    url = ("../" * _cur.count("/") if PREVIEW else "/") + "assets/" + path
+    f = os.path.join(OUT, "assets", path)
+    if os.path.isfile(f) and not PREVIEW:
+        import hashlib
+        url += "?v=" + hashlib.md5(open(f, "rb").read()).hexdigest()[:8]
+    return url
 
 
 NAV = [("uslugi/", "Услуги"), ("metod/", "Метод"), ("cases/", "Кейсы"), ("blog/", "Блог"), ("about/", "Обо мне")]

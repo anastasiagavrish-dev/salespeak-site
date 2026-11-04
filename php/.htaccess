@@ -17,4 +17,7 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
 <FilesMatch "\.(woff2|webp|jpg|svg|css|js)$">
 Header set Cache-Control "public, max-age=604800"
 </FilesMatch>
+<FilesMatch "\.(html|txt|xml)$">
+Header set Cache-Control "no-cache"
+</FilesMatch>
 </IfModule>
