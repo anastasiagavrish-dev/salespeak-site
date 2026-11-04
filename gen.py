@@ -443,6 +443,8 @@ def main():
     if not PREVIEW:
         urls = "".join(f"<url><loc>{SITE}/{p}</loc></url>" for p in SITEMAP)
         open(os.path.join(OUT, "sitemap.xml"), "w").write(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
+        import datetime
+        open(os.path.join(OUT, "build.txt"), "w").write(datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
         open(os.path.join(OUT, "robots.txt"), "w").write(f"User-agent: *\nDisallow: /admin\nDisallow: /api/\nSitemap: {SITE}/sitemap.xml\n")
     print("pages:", len(SITEMAP), "→", OUT)
 
