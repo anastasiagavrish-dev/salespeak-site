@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 # Забирает обновления сайта с GitHub. Перезапускает бэкенд, только если менялся его код.
+# Сам обновляет служебные скрипты и выпускает HTTPS, как только домен начинает указывать на сервер.
 set -euo pipefail
 APP=/opt/salespeak
 cd "$APP"
 OLD=$(git rev-parse HEAD)
 git fetch -q origin main
 NEW=$(git rev-parse origin/main)
-[[ "$OLD" == "$NEW" ]] && exit 0
-git reset -q --hard origin/main
-if git diff --name-only "$OLD" "$NEW" | grep -q '^backend/'; then
-  "$APP/venv/bin/pip" install -q -r "$APP/backend/requirements.txt"
-  systemctl restart salespeak
+if [[ "$OLD" != "$NEW" ]]; then
+  git reset -q --hard origin/main
+  install -m 755 "$APP/deploy/update.sh" /usr/local/bin/salespeak-update
+  install -m 755 "$APP/deploy/cert.sh" /usr/local/bin/salespeak-cert
+  if git diff --name-only "$OLD" "$NEW" | grep -q '^backend/'; then
+    "$APP/venv/bin/pip" install -q -r "$APP/backend/requirements.txt"
+    systemctl restart salespeak
+  fi
+  if git diff --name-only "$OLD" "$NEW" | grep -q '^deploy/nginx-'; then
+    REGION=$(grep '^REGION=' /etc/salespeak.env | cut -d= -f2)
+    mkdir -p /etc/nginx/salespeak-ssl /var/www/certbot
+    cp "$APP/deploy/nginx-$REGION.conf" /etc/nginx/sites-available/salespeak && nginx -t -q && systemctl reload nginx
+  fi
+  echo "Обновлено до $NEW"
 fi
-if git diff --name-only "$OLD" "$NEW" | grep -q '^deploy/nginx-'; then
-  REGION=$(grep '^REGION=' /etc/salespeak.env | cut -d= -f2)
-  cp "$APP/deploy/nginx-$REGION.conf" /etc/nginx/sites-available/salespeak && nginx -t -q && systemctl reload nginx
-fi
-echo "Обновлено до $NEW"
+# Сертификаты: пробуем раз в 10 минут, пока не выпустятся все (тихо, без ошибок в журнале)
+/usr/local/bin/salespeak-cert >/dev/null 2>&1 || true

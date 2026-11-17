@@ -1,4 +1,4 @@
-"""Прием заявок salespeak.ru + админка.
+"""Прием заявок a-gavrish.com + админка.
 
 Один файл, один и тот же код на сервере в России (REGION=ru) и в Казахстане (REGION=kz).
 Настройки – в переменных окружения (.env, права 600), см. .env.example.
@@ -12,8 +12,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 
 REGION = os.environ.get("REGION", "ru")
 DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(__file__), "leads.sqlite3"))
-SITE_ORIGIN = os.environ.get("SITE_ORIGIN", "https://salespeak.ru")
-ADMIN_BASE = os.environ.get("ADMIN_BASE", "https://salespeak.ru/admin")
+SITE_ORIGIN = os.environ.get("SITE_ORIGIN", "https://a-gavrish.com")
+ADMIN_BASE = os.environ.get("ADMIN_BASE", "https://a-gavrish.com/admin")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")  # формат scrypt$<salt_b64>$<hash_b64>
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "") or secrets.token_hex(32)
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
@@ -223,7 +223,7 @@ details.del[open] summary{color:var(--muted)}
 
 def page(title, body):
     return f"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow"><title>{html.escape(title)} – заявки salespeak.ru</title>
+<meta name="robots" content="noindex,nofollow"><title>{html.escape(title)} – заявки a-gavrish.com</title>
 <link rel="stylesheet" href="/assets/fonts.css"><style>{ADMIN_CSS}</style></head><body>{body}</body></html>"""
 
 

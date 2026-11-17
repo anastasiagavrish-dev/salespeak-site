@@ -1,6 +1,6 @@
 <?php
 // Забирает обновления сайта с GitHub. Запускается по расписанию из Crontab хостинга:
-//   php ~/salespeak.ru/public_html/_app/update.php
+//   php ~/a-gavrish.com/public_html/_app/update.php
 declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require __DIR__ . '/lib.php';

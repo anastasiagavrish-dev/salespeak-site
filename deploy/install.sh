@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Установка сайта salespeak.ru на чистый сервер Ubuntu 22.04/24.04.
+# Установка сайта a-gavrish.com на чистый сервер Ubuntu 22.04/24.04.
 # Запуск из консоли сервера под root:
 #   curl -fsSL https://raw.githubusercontent.com/anastasiagavrish-dev/salespeak-site/main/deploy/install.sh | bash -s -- ru
 #   curl -fsSL https://raw.githubusercontent.com/anastasiagavrish-dev/salespeak-site/main/deploy/install.sh | bash -s -- kz
@@ -12,8 +12,8 @@ APP=/opt/salespeak
 DATA=/var/lib/salespeak
 ENVF=/etc/salespeak.env
 EMAIL="anastasia.gavrish@gmail.com"
-if [[ "$REGION" == "ru" ]]; then DOMAINS=(salespeak.ru www.salespeak.ru); ADMIN_BASE="https://salespeak.ru/admin"
-else DOMAINS=(kz.salespeak.ru); ADMIN_BASE="https://kz.salespeak.ru/admin"; fi
+if [[ "$REGION" == "ru" ]]; then DOMAINS=(a-gavrish.com www.a-gavrish.com salespeak.ru www.salespeak.ru); ADMIN_BASE="https://a-gavrish.com/admin"
+else DOMAINS=(kz.a-gavrish.com); ADMIN_BASE="https://kz.a-gavrish.com/admin"; fi
 
 say(){ printf '\n\033[1;35m▶ %s\033[0m\n' "$1"; }
 
@@ -49,7 +49,7 @@ if [[ ! -f "$ENVF" ]]; then
   cat > "$ENVF" <<EOF
 REGION=$REGION
 DB_PATH=$DATA/leads.sqlite3
-SITE_ORIGIN=https://salespeak.ru
+SITE_ORIGIN=https://a-gavrish.com
 ADMIN_BASE=$ADMIN_BASE
 ADMIN_PASSWORD_HASH=$HASH
 SESSION_SECRET=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -59,8 +59,13 @@ CONSENT_VERSION=2026-11-03
 EOF
   chmod 600 "$ENVF"
 else
-  echo "Настройки уже есть в $ENVF, оставляю как есть."
+  echo "Настройки уже есть в $ENVF, оставляю пароль и Telegram как есть."
+  if grep -q 'salespeak\.ru' "$ENVF"; then
+    sed -i 's#https://kz\.salespeak\.ru#https://kz.a-gavrish.com#g; s#https://salespeak\.ru#https://a-gavrish.com#g' "$ENVF"
+    echo "Адрес сайта в настройках заменен на a-gavrish.com."
+  fi
 fi
+grep -q '^CERT_EMAIL=' "$ENVF" || echo "CERT_EMAIL=$EMAIL" >> "$ENVF"
 
 say "5/8 Запускаю сервис"
 cp "$APP/deploy/salespeak.service" /etc/systemd/system/salespeak.service
@@ -69,9 +74,11 @@ install -m 755 "$APP/deploy/update.sh" /usr/local/bin/salespeak-update
 install -m 755 "$APP/deploy/cert.sh" /usr/local/bin/salespeak-cert
 systemctl daemon-reload
 systemctl enable --now salespeak.service salespeak-update.timer >/dev/null
+systemctl restart salespeak
 sleep 2; systemctl is-active --quiet salespeak && echo "Бэкенд работает."
 
 say "6/8 Настраиваю nginx"
+mkdir -p /etc/nginx/salespeak-ssl /var/www/certbot
 cp "$APP/deploy/nginx-$REGION.conf" /etc/nginx/sites-available/salespeak
 ln -sf /etc/nginx/sites-available/salespeak /etc/nginx/sites-enabled/salespeak
 rm -f /etc/nginx/sites-enabled/default
@@ -84,9 +91,9 @@ cat > /etc/cron.d/salespeak-backup <<EOF
 EOF
 
 say "8/8 HTTPS"
-REGION="$REGION" /usr/local/bin/salespeak-cert || true
+REGION="$REGION" EMAIL="$EMAIL" /usr/local/bin/salespeak-cert || true
 
 IP=$(curl -fsS -4 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
 echo
 echo "Готово. IP сервера: $IP"
-echo "Если HTTPS еще не выпущен, направьте домен ${DOMAINS[*]} на $IP и выполните: salespeak-cert"
+echo "Если HTTPS еще не выпущен, направьте домены ${DOMAINS[*]} на $IP – сертификаты выпустятся сами в течение 10–30 минут."

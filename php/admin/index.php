@@ -1,5 +1,5 @@
 <?php
-// Админка заявок salespeak.ru: первый вход с кодом установки, пароль, статусы, CSV, удаление, настройки Telegram.
+// Админка заявок a-gavrish.com: первый вход с кодом установки, пароль, статусы, CSV, удаление, настройки Telegram.
 declare(strict_types=1);
 require dirname(__DIR__) . '/_app/lib.php';
 
@@ -45,7 +45,7 @@ label{font-weight:600;font-size:15px}input{width:100%;min-height:50px;padding:12
 :focus-visible{outline:3px solid var(--violet);outline-offset:2px}
 CSS;
     echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow">'
-        . '<title>' . e($title) . ' – заявки salespeak.ru</title><link rel="stylesheet" href="/assets/fonts.css"><style>' . $css . '</style></head><body>' . $body . '</body></html>';
+        . '<title>' . e($title) . ' – заявки a-gavrish.com</title><link rel="stylesheet" href="/assets/fonts.css"><style>' . $css . '</style></head><body>' . $body . '</body></html>';
     exit;
 }
 

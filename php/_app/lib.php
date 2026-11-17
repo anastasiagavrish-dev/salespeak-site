@@ -1,5 +1,5 @@
 <?php
-// Общие функции приема заявок salespeak.ru для обычного хостинга (PHP + SQLite).
+// Общие функции приема заявок a-gavrish.com для обычного хостинга (PHP + SQLite).
 declare(strict_types=1);
 
 const CONSENT_VERSION = '2026-11-03';
@@ -53,7 +53,7 @@ function client_ip(): string { return (string)($_SERVER['HTTP_X_REAL_IP'] ?? $_S
 function notify(int $id): void {
     $s = settings();
     if (empty($s['tg_token']) || empty($s['tg_chat'])) return;
-    $host = $_SERVER['HTTP_HOST'] ?? 'salespeak.ru';
+    $host = $_SERVER['HTTP_HOST'] ?? 'a-gavrish.com';
     $text = "Новая заявка №$id. Открыть: https://$host/admin/";
     $ctx = stream_context_create(['http' => ['method' => 'POST', 'timeout' => 8,
         'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
