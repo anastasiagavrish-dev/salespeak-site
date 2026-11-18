@@ -8,6 +8,10 @@ ENVF=/etc/kassa-bot.env
 cd "$APP" && git fetch -q origin main && git reset -q --hard origin/main
 [[ -f "$APP/bot/kassa_bot.py" ]] || { echo "Нет кода бота в $APP/bot – обновление с GitHub не прошло."; exit 1; }
 
+if ! curl -sS -m 15 -o /dev/null https://api.telegram.org; then
+  echo "С этого сервера не открывается api.telegram.org – Telegram отсюда недоступен. Бота нужно ставить на сервер в другой стране: deploy/kassa-bot-standalone.sh"; exit 2
+fi
+
 read -rsp "1/2. Вставьте токен бота от @BotFather (символы не видны) и нажмите Enter: " TOKEN </dev/tty; echo
 TOKEN=$(echo "$TOKEN" | tr -d '[:space:]')
 [[ "$TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || { echo "Это не похоже на токен бота. Скопируйте его из @BotFather целиком и запустите снова."; exit 1; }
