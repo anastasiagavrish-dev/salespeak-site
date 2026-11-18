@@ -17,6 +17,12 @@ if [[ "$OLD" != "$NEW" ]]; then
     "$APP/venv/bin/pip" install -q -r "$APP/backend/requirements.txt"
     systemctl restart salespeak
   fi
+  # Бот «Касса тает» – только если он уже установлен (deploy/kassa-bot.sh)
+  if [[ -f /etc/kassa-bot.env ]] && git diff --name-only "$OLD" "$NEW" | grep -q -e '^bot/' -e '^deploy/kassa-bot.service'; then
+    "$APP/bot-venv/bin/pip" install -q -r "$APP/bot/requirements.txt"
+    install -m 644 "$APP/deploy/kassa-bot.service" /etc/systemd/system/kassa-bot.service && systemctl daemon-reload
+    systemctl restart kassa-bot
+  fi
   if git diff --name-only "$OLD" "$NEW" | grep -q '^deploy/nginx-'; then
     REGION=$(grep '^REGION=' /etc/salespeak.env | cut -d= -f2)
     mkdir -p /etc/nginx/salespeak-ssl /var/www/certbot

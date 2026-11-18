@@ -1,0 +1,16 @@
+[Unit]
+Description=Telegram-бот «Касса тает»
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=salespeak
+WorkingDirectory=/opt/salespeak/bot
+EnvironmentFile=/etc/kassa-bot.env
+Environment=BOT_DATA=/var/lib/kassa-bot
+ExecStart=/opt/salespeak/bot-venv/bin/python kassa_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
