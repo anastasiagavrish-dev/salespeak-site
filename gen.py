@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "preview" if PREVIEW else "public")
 SITE = "https://a-gavrish.com"
 KZ_API = ""  # адрес приема заявок в Казахстане, когда появится хостинг в РК
-METRIKA_ID = ""  # номер счетчика Яндекс Метрики – подставить при запуске
+METRIKA_ID = "114339872"  # номер счетчика Яндекс Метрики (a-gavrish.com)
 CONSENT_VERSION = "2026-11-03"
 E = html.escape
 
