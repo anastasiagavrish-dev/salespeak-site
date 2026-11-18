@@ -130,9 +130,22 @@ def layout(path, title, desc, body, ld=None, noindex=False):
 {footer()}
 <script src="{a('site.js')}" defer></script>
 </body></html>"""
+    page = re.sub(r"<a\b[^>]*>", _external_blank, page)
     dest = os.path.join(OUT, path, "index.html") if path.endswith("/") or path == "" else os.path.join(OUT, path)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     open(dest, "w").write(page)
+
+
+def _external_blank(m):
+    """Внешние ссылки (Telegram, WhatsApp, другие сайты) открываются в новой вкладке, внутренние – в той же."""
+    tag = m.group(0)
+    href = re.search(r'href="([^"]*)"', tag)
+    if not href or "target=" in tag:
+        return tag
+    h = href.group(1)
+    if h.startswith(("http://", "https://", "//")) and not h.startswith(SITE):
+        return tag[:-1] + ' target="_blank" rel="noopener">'
+    return tag
     SITEMAP.append(path)
 
 

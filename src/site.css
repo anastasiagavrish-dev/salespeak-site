@@ -135,7 +135,7 @@ mark{color:inherit;background:none}
 
 /* principles */
 .princ-list{counter-reset:p;display:grid;gap:0}
-.princ-list li{counter-increment:p;display:grid;grid-template-columns:72px minmax(0,1fr);align-items:baseline;padding-block:18px;border-top:1px solid var(--line);font:700 clamp(18px,2vw,24px)/1.25 var(--display)}
+.princ-list li{counter-increment:p;display:grid;grid-template-columns:72px minmax(0,1fr);align-items:baseline;padding-block:16px;border-top:1px solid var(--line);font:500 18px/1.5 var(--body)}
 .princ-list li::before{content:counter(p);font-size:16px;color:var(--accent-tx)}
 
 /* blog */
