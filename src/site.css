@@ -290,7 +290,8 @@ div.case{cursor:default}div.case:hover{transform:none}
 .case-metric span{display:block;margin-top:6px;color:var(--muted);font-size:15px}
 .empty{color:var(--muted);padding:24px 0}
 /* статья, кейс, документ */
-.prose{max-width:760px}
+.prose{max-width:none}
+.prose>*{max-width:760px}
 .prose h2{font-size:clamp(24px,2.6vw,32px);margin:48px 0 16px}
 .prose h2:first-child{margin-top:0}
 .prose p,.prose li{font-size:18px;line-height:1.65}
@@ -298,7 +299,7 @@ div.case{cursor:default}div.case:hover{transform:none}
 .prose ul:not(.ticks),.prose ol.done{display:grid;gap:10px;padding-left:22px;list-style:revert}
 .prose a{color:var(--accent-tx)}
 .prose .steps-prose{grid-template-columns:minmax(0,1fr)!important;gap:28px;margin-top:8px}
-.prose .steps-prose li{padding:0 0 0 64px}
+.prose .steps-prose li{padding:0 0 0 84px}
 .prose .steps-prose li::before{top:0;font-size:32px}
 .prose .steps-prose h3{font-size:20px}
 .prose .steps-prose p{font-size:17px;color:var(--fg)}
@@ -345,7 +346,7 @@ div.case{cursor:default}div.case:hover{transform:none}
   .case-row{grid-template-columns:minmax(0,1fr)}
   .case-grid-2{grid-template-columns:minmax(0,1fr)!important}
   .prose p,.prose li{font-size:17px}
-  .prose .steps-prose li{padding-left:52px}
+  .prose .steps-prose li{padding-left:60px}
   .cookie .btn{flex:1}
 }
 h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
