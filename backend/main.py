@@ -75,16 +75,25 @@ def startup():
     threading.Thread(target=purge_loop, daemon=True).start()
 
 
-# ---------- уведомление в Telegram (без персональных данных) ----------
+# ---------- уведомление о заявке (без персональных данных: только номер и ссылка на админку) ----------
+NOTIFY_URL = os.environ.get("NOTIFY_URL", "")  # веб-приложение Google Apps Script: шлет письмо и Telegram
+
+
 def notify(lead_id):
-    if not (TG_BOT_TOKEN and TG_CHAT_ID):
-        return
     text = f"Новая заявка №{lead_id} ({REGION_LABEL}). Открыть: {ADMIN_BASE}"
-    data = urllib.parse.urlencode({"chat_id": TG_CHAT_ID, "text": text, "disable_web_page_preview": "true"}).encode()
-    try:
-        urllib.request.urlopen(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage", data=data, timeout=10)
-    except Exception:
-        pass
+    if NOTIFY_URL:
+        try:
+            req = urllib.request.Request(NOTIFY_URL, data=json.dumps({"text": text, "id": lead_id}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=20)
+        except Exception:
+            pass
+    if TG_BOT_TOKEN and TG_CHAT_ID:
+        data = urllib.parse.urlencode({"chat_id": TG_CHAT_ID, "text": text, "disable_web_page_preview": "true"}).encode()
+        try:
+            urllib.request.urlopen(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage", data=data, timeout=10)
+        except Exception:
+            pass
 
 
 # ---------- прием заявки ----------
