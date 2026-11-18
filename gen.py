@@ -157,12 +157,20 @@ def faq_block(items, head=True):
 
 # ---------------- страницы ----------------
 
+HOME_MORE = {"kontrol-kachestva"}  # услуги, которые на главной идут ссылкой «Еще – …», а не карточкой
+PRINCIPLES = "".join(f"<li>{p}</li>" for p in [
+    "Экологичные продажи без манипуляций и давления – продаем решение проблемы и только тем, кому можем помочь",
+    "Сначала разбираю вашу ситуацию, потом предлагаю решение",
+    "Менеджер ведет клиента, пока тот не скажет «да» или «нет»",
+    "Берусь за работу, только если уверена в результате"])
+
+
 def home():
     global _cur
     _cur = ""
     svc = "".join(f"""<article class="svc"><h3><a href="{u('uslugi/' + s['slug'] + '/')}">{E(s['name'])}</a></h3><dl><dt>Кому</dt><dd>{E(s['short_who'])}</dd><dt>Что изменится</dt><dd>{E(s['short_what'])}</dd></dl></article>"""
-                  for s in SERVICES[:6])
-    more = ", ".join(f'<a href="{u("uslugi/" + s["slug"] + "/")}">{E(s["name"].lower())}</a>' for s in SERVICES[6:])
+                  for s in SERVICES if s["slug"] not in HOME_MORE)
+    more = ", ".join(f'<a href="{u("uslugi/" + s["slug"] + "/")}">{E(s["name"].lower())}</a>' for s in SERVICES if s["slug"] in HOME_MORE)
     cases = "".join(case_card(CASE[k]) for k in ["africa", "b2b-case", "gynecology", "cosmetic"])
     faq, faq_ld = faq_block(FAQ_HOME)
     body = f"""
@@ -197,9 +205,9 @@ def home():
 <section class="about" id="about"><div class="wrap about-in"><div class="about-text"><p class="label">Обо мне</p><h2>Практик, который продает сам</h2>
 <p>Я в продажах и маркетинге с 2010 года. До консалтинга 7 лет была кинопродюсером, сняла 4 полнометражных фильма и сериал, продавала фильмы в прокат в 11 стран. Сейчас помогаю собственникам растить компании через отделы продаж и продолжаю продавать сама.</p>
 <a class="more" href="{u('about/')}">Подробнее обо мне</a></div>
-<ul class="about-facts"><li><b>200 млн ₸</b>личных B2B-продаж за 2024 год</li><li><b>500 млн ₽</b>привлекла в Фонде кино и Минкультуры на производство фильмов</li><li><b>МГТУ им. Баумана</b>и Московская школа кино</li><li><b>Училась у</b>Михаила Уколова, Настасьи Белочкиной, Виталия Говорухина</li></ul></div></section>
+<ul class="about-facts"><li><b>200 млн ₸</b>личных B2B-продаж за 2024 год</li><li><b>500 млн ₽</b>привлекла в Фонде кино и Минкультуры на производство фильмов</li><li><b>Образование</b>МГТУ им. Баумана и Московская школа кино</li><li><b>Училась продажам у</b>Михаила Уколова, Настасьи Белочкиной, Виталия Говорухина</li></ul></div></section>
 <section class="princ" aria-label="Принципы"><div class="wrap"><div class="sec-head"><p class="label">Принципы</p><h2>Как я работаю</h2></div>
-<ol class="princ-list"><li>Продаем человеку решение его проблемы, а не продукт</li><li>Сначала аудит и тайный покупатель, потом инструменты</li><li>Менеджер ведет клиента, пока тот не скажет «да» или «нет»</li><li>Беремся, только если уверены в результате</li></ol></div></section>
+<ol class="princ-list">{PRINCIPLES}</ol></div></section>
 {faq}
 <section class="final"><div class="wrap final-in"><h2>Покажите переписки, а я покажу, где теряются деньги</h2><a class="btn" href="#offer">Хочу разбор переписок</a><p class="msgr">Telegram <a href="{TG}">@gavrish_anastasiya</a>, WhatsApp <span class="sel">{PHONE_TXT}</span></p></div></section>"""
     ld = [{"@context": "https://schema.org", "@graph": [PERSON, {"@type": "ProfessionalService", "@id": SITE + "/#service", "name": "Анастасия Гавриш – консалтинг по продажам", "url": SITE + "/",
@@ -268,7 +276,7 @@ def method_page():
 <p>4–6 переписок или звонков менеджеров и час на созвон. Дальше включаюсь я и говорю, где нужно ваше решение.</p>
 </div></section>
 <section class="princ" aria-label="Принципы"><div class="wrap"><div class="sec-head"><p class="label">Принципы</p><h2>На чем держится метод</h2></div>
-<ol class="princ-list"><li>Продаем человеку решение его проблемы, а не продукт</li><li>Сначала аудит и тайный покупатель, потом инструменты</li><li>Менеджер ведет клиента, пока тот не скажет «да» или «нет»</li><li>Беремся, только если уверены в результате</li></ol></div></section>
+<ol class="princ-list">{PRINCIPLES}</ol></div></section>
 {offer_block()}"""
     layout("metod/", "Метод работы с отделом продаж – сначала аудит, потом инструменты",
            "Как Анастасия Гавриш работает с отделами продаж – аудит переписок и звонков, тайный покупатель, чек-лист по 9 этапам продаж, внедрение и сопровождение.", body, cld)
