@@ -3,6 +3,9 @@
 # Группы: main – основной сайт, old – старый домен с редиректом. Уже выпущенные пропускает.
 # Запуск: salespeak-cert (EMAIL=... для первой регистрации в Let's Encrypt берется из install.sh).
 set -uo pipefail
+# Не запускаться параллельно (установка и таймер обновлений могут стартовать одновременно)
+exec 9>/run/salespeak-cert.lock
+flock -w 120 9 || { echo "salespeak-cert уже выполняется, попробуйте через пару минут."; exit 0; }
 REGION=${REGION:-$(grep '^REGION=' /etc/salespeak.env | cut -d= -f2)}
 if [[ "$REGION" == "ru" ]]; then
   GROUPS_LIST=("main:a-gavrish.com www.a-gavrish.com" "old:salespeak.ru www.salespeak.ru")
