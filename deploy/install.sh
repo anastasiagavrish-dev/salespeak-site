@@ -24,7 +24,9 @@ apt-get install -y -qq nginx python3-venv sqlite3 git ufw certbot python3-certbo
 
 say "2/8 Скачиваю сайт"
 id salespeak >/dev/null 2>&1 || useradd --system --home "$APP" --shell /usr/sbin/nologin salespeak
-if [[ -d "$APP/.git" ]]; then git -C "$APP" pull --ff-only -q; else git clone -q "$REPO" "$APP"; fi
+if [[ -d "$APP/.git" ]]; then git -C "$APP" fetch -q origin main && git -C "$APP" reset -q --hard origin/main; else git clone -q "$REPO" "$APP"; fi
+# Страницы собираются здесь же, на сервере
+(cd "$APP" && python3 gen.py >/dev/null)
 git config --global --add safe.directory "$APP"
 mkdir -p "$DATA/backups"; chown -R salespeak:salespeak "$DATA"
 

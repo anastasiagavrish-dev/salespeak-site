@@ -11,6 +11,8 @@ if [[ "$OLD" != "$NEW" ]]; then
   git reset -q --hard origin/main
   install -m 755 "$APP/deploy/update.sh" /usr/local/bin/salespeak-update
   install -m 755 "$APP/deploy/cert.sh" /usr/local/bin/salespeak-cert
+  # Страницы собираются на сервере из gen.py и content.py
+  python3 gen.py >/dev/null
   if git diff --name-only "$OLD" "$NEW" | grep -q '^backend/'; then
     "$APP/venv/bin/pip" install -q -r "$APP/backend/requirements.txt"
     systemctl restart salespeak
