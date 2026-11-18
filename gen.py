@@ -13,7 +13,7 @@ SITE = "https://a-gavrish.com"
 KZ_API = ""  # адрес приема заявок в Казахстане, когда появится хостинг в РК
 METRIKA_ID = "114339872"  # номер счетчика Яндекс Метрики (a-gavrish.com)
 YANDEX_VERIFICATION = "d59ad12dec1ec192"  # Яндекс Вебмастер
-GOOGLE_VERIFICATION = ""  # Google Search Console – content из тега google-site-verification
+GOOGLE_VERIFICATION = "AS5q5OC1Cb9ig-yKfKVePH5TA7Dw2NGGUOeTEv4HzgM"  # Google Search Console
 VERIFY_META = "".join(f'<meta name="{n}" content="{v}">' for n, v in
                       [("yandex-verification", YANDEX_VERIFICATION), ("google-site-verification", GOOGLE_VERIFICATION)] if v)
 CONSENT_VERSION = "2026-11-03"
