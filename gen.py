@@ -12,6 +12,10 @@ OUT = os.path.join(ROOT, "preview" if PREVIEW else "public")
 SITE = "https://a-gavrish.com"
 KZ_API = ""  # адрес приема заявок в Казахстане, когда появится хостинг в РК
 METRIKA_ID = "114339872"  # номер счетчика Яндекс Метрики (a-gavrish.com)
+YANDEX_VERIFICATION = "d59ad12dec1ec192"  # Яндекс Вебмастер
+GOOGLE_VERIFICATION = ""  # Google Search Console – content из тега google-site-verification
+VERIFY_META = "".join(f'<meta name="{n}" content="{v}">' for n, v in
+                      [("yandex-verification", YANDEX_VERIFICATION), ("google-site-verification", GOOGLE_VERIFICATION)] if v)
 CONSENT_VERSION = "2026-11-03"
 E = html.escape
 
@@ -116,7 +120,7 @@ def layout(path, title, desc, body, ld=None, noindex=False):
 <title>{E(full_title)}</title><meta name="description" content="{E(desc)}">
 <link rel="canonical" href="{canon}">{'<meta name="robots" content="noindex">' if noindex or PREVIEW else ''}
 <meta property="og:type" content="website"><meta property="og:locale" content="ru_RU"><meta property="og:title" content="{E(full_title)}"><meta property="og:description" content="{E(desc)}"><meta property="og:url" content="{canon}"><meta property="og:image" content="{SITE}/assets/og.jpg">
-<meta name="theme-color" content="#4B3FE1"><link rel="icon" href="{a('favicon.svg')}" type="image/svg+xml">
+<meta name="theme-color" content="#4B3FE1">{VERIFY_META}<link rel="icon" href="{a('favicon.svg')}" type="image/svg+xml">
 <link rel="preload" href="{a('fonts/unbounded-cyrillic-600-normal.woff2')}" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="{a('fonts/montserrat-cyrillic-500-normal.woff2')}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{a('fonts.css')}"><link rel="stylesheet" href="{a('site.css')}">{ld_html}
