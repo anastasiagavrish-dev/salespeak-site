@@ -89,7 +89,8 @@ mark{color:inherit;background:none}
 .svc h3 a{text-decoration:none}
 .svc h3 a::after{content:" →";color:var(--accent-tx)}
 .svc h3 a:hover{color:var(--accent-tx)}
-.svc dt{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:10px}
+.svc dt{display:table;margin:16px 0 8px;padding:5px 12px;border-radius:999px;background:var(--lime);color:var(--ink);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:1.2}
+.svc dt:nth-of-type(2){background:var(--violet);color:#fff}
 .svc dd{font-size:16px}
 .svc-more{margin-top:32px;color:var(--muted)}
 .svc-more a{color:var(--fg);font-weight:600}
