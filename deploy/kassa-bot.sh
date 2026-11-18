@@ -1,41 +1,37 @@
 #!/usr/bin/env bash
 # Установка Telegram-бота «Касса тает» (игра по продажам).
 # Запуск на сервере под root: bash /opt/salespeak/deploy/kassa-bot.sh
-# Спросит токен бота, ID каталога и API-ключ Yandex Cloud. Символы токена и ключа не видны при вводе.
+# Спросит токен бота и API-ключ DeepSeek. Символы не видны при вводе.
 set -euo pipefail
 APP=/opt/salespeak
 ENVF=/etc/kassa-bot.env
 cd "$APP" && git fetch -q origin main && git reset -q --hard origin/main
 [[ -f "$APP/bot/kassa_bot.py" ]] || { echo "Нет кода бота в $APP/bot – обновление с GitHub не прошло."; exit 1; }
 
-read -rsp "1/3. Вставьте токен бота от @BotFather (символы не видны) и нажмите Enter: " TOKEN </dev/tty; echo
+read -rsp "1/2. Вставьте токен бота от @BotFather (символы не видны) и нажмите Enter: " TOKEN </dev/tty; echo
 TOKEN=$(echo "$TOKEN" | tr -d '[:space:]')
 [[ "$TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || { echo "Это не похоже на токен бота. Скопируйте его из @BotFather целиком и запустите снова."; exit 1; }
 ME=$(curl -fsS -m 15 "https://api.telegram.org/bot$TOKEN/getMe" || true)
 [[ "$ME" == *'"ok":true'* ]] || { echo "Telegram не принял токен. Проверьте, что скопировали его полностью."; exit 1; }
 
-read -rp "2/3. Вставьте идентификатор каталога Yandex Cloud (из адресной строки консоли, после /folders/) и нажмите Enter: " FOLDER </dev/tty
-FOLDER=$(echo "$FOLDER" | tr -d '[:space:]')
-[[ "$FOLDER" =~ ^[a-z0-9]{10,}$ ]] || { echo "Это не похоже на идентификатор каталога. Скопируйте его из консоли Yandex Cloud."; exit 1; }
-
-read -rsp "3/3. Вставьте API-ключ сервисного аккаунта (символы не видны) и нажмите Enter: " KEY </dev/tty; echo
+read -rsp "2/2. Вставьте API-ключ DeepSeek (начинается на sk-, символы не видны) и нажмите Enter: " KEY </dev/tty; echo
 KEY=$(echo "$KEY" | tr -d '[:space:]')
 [[ ${#KEY} -ge 20 ]] || { echo "Ключ слишком короткий. Скопируйте его целиком и запустите снова."; exit 1; }
 
-echo "Проверяю доступ к YandexGPT…"
-CODE=$(curl -sS -m 60 -o /tmp/kassa-yc-test.json -w '%{http_code}' https://ai.api.cloud.yandex.net/v1/chat/completions \
-  -H "Authorization: Api-Key $KEY" -H "OpenAI-Project: $FOLDER" -H 'Content-Type: application/json' \
-  -d "{\"model\":\"gpt://$FOLDER/yandexgpt/latest\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Ответь одним словом: привет\"}]}" || true)
+echo "Проверяю доступ к DeepSeek…"
+CODE=$(curl -sS -m 60 -o /tmp/kassa-llm-test.json -w '%{http_code}' https://api.deepseek.com/chat/completions \
+  -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"deepseek-flash","max_tokens":20,"messages":[{"role":"user","content":"Ответь одним словом: привет"}]}' || true)
 if [[ "$CODE" != "200" ]]; then
-  echo "YandexGPT ответил кодом $CODE:"; head -c 400 /tmp/kassa-yc-test.json; echo
-  echo "Проверьте ключ, идентификатор каталога, роль ai.languageModels.user у сервисного аккаунта и привязку платежного аккаунта."
-  rm -f /tmp/kassa-yc-test.json; exit 1
+  echo "DeepSeek ответил кодом $CODE:"; head -c 400 /tmp/kassa-llm-test.json; echo
+  echo "401 – неверный ключ, 402 – на балансе DeepSeek нет денег. Если кода нет совсем – сервер не достучался до api.deepseek.com."
+  rm -f /tmp/kassa-llm-test.json; exit 1
 fi
-rm -f /tmp/kassa-yc-test.json
-echo "YandexGPT отвечает."
+rm -f /tmp/kassa-llm-test.json
+echo "DeepSeek отвечает."
 
 umask 077
-printf 'TG_BOT_TOKEN=%s\nYC_FOLDER_ID=%s\nYC_API_KEY=%s\nYC_MODEL=yandexgpt/latest\nGAMES_PER_DAY=3\nCONTACT=gavrish_anastasiya\n' "$TOKEN" "$FOLDER" "$KEY" > "$ENVF"
+printf 'TG_BOT_TOKEN=%s\nLLM_API_KEY=%s\nLLM_BASE=https://api.deepseek.com\nLLM_MODEL_FAST=deepseek-flash\nLLM_MODEL_SMART=deepseek-v4-pro\nGAMES_PER_DAY=3\nCONTACT=gavrish_anastasiya\n' "$TOKEN" "$KEY" > "$ENVF"
 chown root:salespeak "$ENVF"; chmod 640 "$ENVF"
 umask 022
 

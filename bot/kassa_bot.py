@@ -1,5 +1,5 @@
 """Telegram-бот «Касса тает» – тренажер-диагностика переписки отдела продаж.
-Клиентов и разбор играет YandexGPT. Настройки – в переменных окружения (см. deploy/kassa-bot.sh)."""
+Клиентов и разбор играет нейросеть (по умолчанию DeepSeek). Настройки – в переменных окружения (см. deploy/kassa-bot.sh)."""
 import asyncio
 import html
 import json
@@ -20,11 +20,11 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
 from game_data import CLIENTS, DEFAULT_NUMBERS, FILES, MAX_TURNS, PROJECT, PROJECT_TEXT, RULES, STAGES
 
 TOKEN = os.environ.get("TG_BOT_TOKEN", "")
-YC_KEY = os.environ.get("YC_API_KEY", "")
-YC_FOLDER = os.environ.get("YC_FOLDER_ID", "")
-YC_MODEL = os.environ.get("YC_MODEL", "yandexgpt/latest")
-YC_BASE = os.environ.get("YC_BASE", "https://ai.api.cloud.yandex.net")
-YC_LLM = os.environ.get("YC_LLM", "https://llm.api.cloud.yandex.net")
+# Любая нейросеть с OpenAI-совместимым API. По умолчанию DeepSeek.
+LLM_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_BASE = os.environ.get("LLM_BASE", "https://api.deepseek.com").rstrip("/")
+MODEL_FAST = os.environ.get("LLM_MODEL_FAST", "deepseek-flash")    # реплики клиентов
+MODEL_SMART = os.environ.get("LLM_MODEL_SMART", "deepseek-v4-pro")  # разборы
 GAMES_PER_DAY = int(os.environ.get("GAMES_PER_DAY", "3"))
 DATA_DIR = os.environ.get("BOT_DATA", "/var/lib/kassa-bot")
 CONTACT = os.environ.get("CONTACT", "gavrish_anastasiya")
@@ -60,24 +60,16 @@ def esc(s):
     return html.escape(str(s or ""), quote=False)
 
 
-# ---------------- YandexGPT ----------------
-async def llm(prompt, temperature=0.6, max_tokens=1500):
+# ---------------- нейросеть ----------------
+async def llm(prompt, model, temperature=0.6, max_tokens=1500):
     async with httpx.AsyncClient(timeout=120) as c:
-        r = await c.post(f"{YC_BASE}/v1/chat/completions",
-                         headers={"Authorization": f"Api-Key {YC_KEY}", "OpenAI-Project": YC_FOLDER},
-                         json={"model": f"gpt://{YC_FOLDER}/{YC_MODEL}", "temperature": temperature, "max_tokens": max_tokens,
+        r = await c.post(f"{LLM_BASE}/chat/completions",
+                         headers={"Authorization": f"Bearer {LLM_KEY}"},
+                         json={"model": model, "temperature": temperature, "max_tokens": max_tokens,
+                               "response_format": {"type": "json_object"},
                                "messages": [{"role": "user", "content": prompt}]})
-        if r.status_code in (404, 405, 501):
-            # запасной вариант – классический API Foundation Models
-            r = await c.post(f"{YC_LLM}/foundationModels/v1/completion",
-                             headers={"Authorization": f"Api-Key {YC_KEY}", "x-folder-id": YC_FOLDER},
-                             json={"modelUri": f"gpt://{YC_FOLDER}/{YC_MODEL}",
-                                   "completionOptions": {"stream": False, "temperature": temperature, "maxTokens": str(max_tokens)},
-                                   "messages": [{"role": "user", "text": prompt}]})
-            r.raise_for_status()
-            return r.json()["result"]["alternatives"][0]["message"]["text"]
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        return r.json()["choices"][0]["message"]["content"] or ""
 
 
 def parse_json(text, want):
@@ -100,17 +92,17 @@ def parse_json(text, want):
     return None
 
 
-async def llm_json(prompt, want, temperature=0.6, max_tokens=1500, tries=2):
+async def llm_json(prompt, want, model, temperature=0.6, max_tokens=1500, tries=2):
     last = None
     for k in range(tries):
         try:
-            v = parse_json(await llm(prompt, temperature, max_tokens), want)
+            v = parse_json(await llm(prompt, model, temperature, max_tokens), want)
             if v is not None:
                 return v
             last = ValueError("ответ не в формате JSON")
         except Exception as e:  # сеть, лимиты, ошибки API
             last = e
-            log.warning("YandexGPT: %s", e)
+            log.warning("LLM: %s", e)
         await asyncio.sleep(1.5)
     raise last or RuntimeError("нет ответа")
 
@@ -219,8 +211,8 @@ def steps_prompt(g, t):
 {lines}
 
 Для каждого шага оцени ответ менеджера и напиши, как ответить правильно, чтобы клиент не слился и пошел к встрече. Готовый ответ пиши так, как менеджер отправил бы его клиенту в мессенджер, коротко и по-человечески, с вопросом или следующим шагом в конце.
-Верни строго JSON без markdown – массив ровно из {len(t)} элементов в том же порядке:
-[{{"ok": true или false, "comment": "1–2 предложения – что хорошо или где ошибка и почему клиенту это не понравится", "better": "как стоило ответить – готовое сообщение клиенту; если ответ был хорош, можно оставить пустую строку"}}]"""
+Верни строго JSON без markdown – объект с полем steps, в нем массив ровно из {len(t)} элементов в том же порядке:
+{{"steps": [{{"ok": true или false, "comment": "1–2 предложения – что хорошо или где ошибка и почему клиенту это не понравится", "better": "как стоило ответить – готовое сообщение клиенту; если ответ был хорош, можно оставить пустую строку"}}]}}"""
 
 
 # ---------------- тексты ----------------
@@ -285,7 +277,7 @@ async def client_turn(bot, chat_id, g):
     stop = asyncio.Event()
     tl = asyncio.create_task(typing_loop(bot, chat_id, stop))
     try:
-        r = await llm_json(client_prompt(g), dict, temperature=0.7, max_tokens=400)
+        r = await llm_json(client_prompt(g), dict, MODEL_FAST, temperature=0.7, max_tokens=400)
     except Exception as e:
         log.warning("client reply failed: %s", e)
         g.turns -= 1
@@ -318,15 +310,15 @@ async def close_client(bot, chat_id, g, outcome):
     stop = asyncio.Event()
     tl = asyncio.create_task(typing_loop(bot, chat_id, stop))
     turns = manager_turns(g.log)
-    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, temperature=0.4, max_tokens=1200))
-    st = asyncio.create_task(llm_json(steps_prompt(g, turns), list, temperature=0.4, max_tokens=2500)) if turns else None
+    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=1200))
+    st = asyncio.create_task(llm_json(steps_prompt(g, turns), dict, MODEL_SMART, temperature=0.4, max_tokens=2500)) if turns else None
     v = s = None
     try:
         v = await vt
     except Exception as e:
         log.warning("verdict failed: %s", e)
     try:
-        s = await st if st else []
+        s = (await st).get("steps", []) if st else []
     except Exception as e:
         log.warning("steps failed: %s", e)
     stop.set()
@@ -546,8 +538,8 @@ async def on_text(m: Message):
 
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if not (TOKEN and YC_KEY and YC_FOLDER):
-        raise SystemExit("Не заданы TG_BOT_TOKEN, YC_API_KEY или YC_FOLDER_ID")
+    if not (TOKEN and LLM_KEY):
+        raise SystemExit("Не заданы TG_BOT_TOKEN или LLM_API_KEY")
     bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
