@@ -23,6 +23,8 @@ TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 YC_KEY = os.environ.get("YC_API_KEY", "")
 YC_FOLDER = os.environ.get("YC_FOLDER_ID", "")
 YC_MODEL = os.environ.get("YC_MODEL", "yandexgpt/latest")
+YC_BASE = os.environ.get("YC_BASE", "https://ai.api.cloud.yandex.net")
+YC_LLM = os.environ.get("YC_LLM", "https://llm.api.cloud.yandex.net")
 GAMES_PER_DAY = int(os.environ.get("GAMES_PER_DAY", "3"))
 DATA_DIR = os.environ.get("BOT_DATA", "/var/lib/kassa-bot")
 CONTACT = os.environ.get("CONTACT", "gavrish_anastasiya")
@@ -61,13 +63,13 @@ def esc(s):
 # ---------------- YandexGPT ----------------
 async def llm(prompt, temperature=0.6, max_tokens=1500):
     async with httpx.AsyncClient(timeout=120) as c:
-        r = await c.post("https://ai.api.cloud.yandex.net/v1/chat/completions",
+        r = await c.post(f"{YC_BASE}/v1/chat/completions",
                          headers={"Authorization": f"Api-Key {YC_KEY}", "OpenAI-Project": YC_FOLDER},
                          json={"model": f"gpt://{YC_FOLDER}/{YC_MODEL}", "temperature": temperature, "max_tokens": max_tokens,
                                "messages": [{"role": "user", "content": prompt}]})
         if r.status_code in (404, 405, 501):
             # запасной вариант – классический API Foundation Models
-            r = await c.post("https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+            r = await c.post(f"{YC_LLM}/foundationModels/v1/completion",
                              headers={"Authorization": f"Api-Key {YC_KEY}", "x-folder-id": YC_FOLDER},
                              json={"modelUri": f"gpt://{YC_FOLDER}/{YC_MODEL}",
                                    "completionOptions": {"stream": False, "temperature": temperature, "maxTokens": str(max_tokens)},

@@ -14,7 +14,7 @@ TOKEN=$(echo "$TOKEN" | tr -d '[:space:]')
 ME=$(curl -fsS -m 15 "https://api.telegram.org/bot$TOKEN/getMe" || true)
 [[ "$ME" == *'"ok":true'* ]] || { echo "Telegram не принял токен. Проверьте, что скопировали его полностью."; exit 1; }
 
-read -rp "2/3. Вставьте идентификатор каталога Yandex Cloud (начинается на b1g) и нажмите Enter: " FOLDER </dev/tty
+read -rp "2/3. Вставьте идентификатор каталога Yandex Cloud (из адресной строки консоли, после /folders/) и нажмите Enter: " FOLDER </dev/tty
 FOLDER=$(echo "$FOLDER" | tr -d '[:space:]')
 [[ "$FOLDER" =~ ^[a-z0-9]{10,}$ ]] || { echo "Это не похоже на идентификатор каталога. Скопируйте его из консоли Yandex Cloud."; exit 1; }
 
