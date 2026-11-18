@@ -13,10 +13,11 @@ import httpx
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ChatAction, ParseMode
-from aiogram.filters import Command, CommandStart
-from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
+from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
                            ReplyKeyboardMarkup, ReplyKeyboardRemove)
 
+import owner as own
 from game_data import CLIENTS, DEFAULT_NUMBERS, FILES, MAX_TURNS, PROJECT, PROJECT_TEXT, RULES, STAGES
 
 TOKEN = os.environ.get("TG_BOT_TOKEN", "")
@@ -28,6 +29,8 @@ MODEL_SMART = os.environ.get("LLM_MODEL_SMART", "deepseek-v4-pro")  # разбо
 GAMES_PER_DAY = int(os.environ.get("GAMES_PER_DAY", "3"))
 DATA_DIR = os.environ.get("BOT_DATA", "/var/lib/kassa-bot")
 CONTACT = os.environ.get("CONTACT", "gavrish_anastasiya")
+ADMINS = {x.strip().lstrip("@").lower() for x in os.environ.get("ADMIN_USERNAMES", "gavrish_anastasiya").split(",") if x.strip()}
+BOT_NAME = {"v": ""}
 
 log = logging.getLogger("kassa")
 router = Router()
@@ -117,11 +120,17 @@ class Game:
         self.results = [None] * len(CLIENTS)
         self.busy = False
         self.closing = False
+        self.team = None   # id отдела, если менеджер играет по ссылке собственника
+        self.pid = None
+        self.alias = ""
 
 
 GAMES: dict[int, Game] = {}
 NUMS: dict[int, dict] = {}
 WAIT_NUMS: set[int] = set()
+WAIT_CODE: set[int] = set()
+WAIT_TITLE: dict[int, str] = {}
+WAIT_ALIAS: dict[int, str] = {}
 PLAYS: dict[int, list] = defaultdict(list)
 
 
@@ -240,7 +249,8 @@ START_TEXT = ("<b>Сколько ваш отдел теряет в перепи�
 
 def start_kb():
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="▶️ Начать игру", callback_data="go")],
-                                                 [InlineKeyboardButton(text="🔢 Подставить свои цифры", callback_data="nums")]])
+                                                 [InlineKeyboardButton(text="🔢 Подставить свои цифры", callback_data="nums")],
+                                                 [InlineKeyboardButton(text="👔 Проверить мой отдел продаж", callback_data="own")]])
 
 
 def nums_text(n):
@@ -324,6 +334,11 @@ async def close_client(bot, chat_id, g, outcome):
     stop.set()
     await tl
     g.results[g.i]["v"] = v
+    if g.pid:
+        try:
+            own.save_result(g.pid, g.i, dict(lost=outcome != "meeting", v=v, steps=s or [], log=g.log))
+        except Exception as e:
+            log.warning("save_result: %s", e)
     c = CLIENTS[g.i]
     if v:
         parts = [f"🧾 <b>Разбор · {esc(c['name'])}</b>"]
@@ -375,6 +390,8 @@ async def send_long(bot, chat_id, text):
 
 
 async def finale(bot, chat_id, g):
+    if g.team:
+        return await team_finale(bot, chat_id, g)
     t = till(g.nums)
     done = [r for r in g.results if r]
     lost = sum(1 for r in done if r["lost"])
@@ -395,6 +412,104 @@ async def finale(bot, chat_id, g):
     save_stats(g)
 
 
+async def team_finale(bot, chat_id, g):
+    t = own.team(g.team)
+    tot = till(g.nums)["total"]
+    done = [r for r in g.results if r]
+    lost = sum(1 for r in done if r["lost"])
+    share = lost / len(done) if done else 0
+    own.finish_player(g.pid)
+    save_stats(g)
+    await bot.send_message(chat_id, f"📊 <b>Готово!</b>\n\nДо встречи дошли {len(done) - lost} из {len(done)} клиентов. "
+                           f"Результат и разборы отправлены руководителю. Спасибо, что прошли проверку!")
+    if t:
+        try:
+            await bot.send_message(t["owner_chat"], f"👤 <b>{esc(g.alias)}</b> – проверка пройдена, отдел «{esc(t['title'])}».\n"
+                                   f"Встречи – {len(done) - lost} из {len(done)}, потери – около <b>{short(share * tot)}</b> в месяц.",
+                                   reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📊 Отчет по отделу", callback_data=f"r:{t['id']}")]]))
+        except Exception as e:
+            log.warning("notify owner: %s", e)
+
+
+async def bot_name(bot):
+    if not BOT_NAME["v"]:
+        BOT_NAME["v"] = (await bot.get_me()).username
+    return BOT_NAME["v"]
+
+
+def team_link(name, tid):
+    return f"https://t.me/{name}?start=t_{tid}"
+
+
+def invite_text(t, link):
+    return (f"Коллеги, пройдите, пожалуйста, короткую проверку переписки – это игра в Telegram. Пять клиентов застройщика пишут вам в мессенджер, "
+            f"ваша задача – довести их до встречи. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}")
+
+
+def is_admin(u):
+    return (u.username or "").lower() in ADMINS
+
+
+async def owner_menu(m_or_q, uid):
+    ts = own.owner_teams(uid)
+    msg = m_or_q.message if isinstance(m_or_q, CallbackQuery) else m_or_q
+    if not ts:
+        WAIT_CODE.add(uid)
+        await msg.answer("<b>Проверка отдела продаж</b>\n\nВы получите ссылку для менеджеров. Каждый пройдет тех же 5 клиентов, "
+                         "а вам придет отчет по отделу – кто где сливает клиентов, сколько это стоит в деньгах и что исправить.\n\n"
+                         f"Чтобы открыть доступ, пришлите код. Код можно получить у Анастасии – @{CONTACT}")
+        return
+    kb = [[InlineKeyboardButton(text=f"📊 {t['title']} – отчет", callback_data=f"r:{t['id']}"),
+           InlineKeyboardButton(text="🔗 Ссылка", callback_data=f"l:{t['id']}")] for t in ts[:8]]
+    kb.append([InlineKeyboardButton(text="➕ Новый отдел по коду", callback_data="own_new")])
+    await msg.answer("<b>Ваши отделы</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+
+
+async def send_report(bot, chat_id, tid, uid):
+    t = own.team(tid)
+    if not t or t["owner_id"] != uid:
+        await bot.send_message(chat_id, "Отчет доступен только владельцу отдела.")
+        return
+    ps = own.players(tid)
+    if not any(any(r for r in p["results"]) for p in ps):
+        name = await bot_name(bot)
+        await bot.send_message(chat_id, "Пока никто из менеджеров не прошел ни одного клиента. Ссылка для команды:\n" + team_link(name, tid))
+        return
+    tot = till(own.team_nums(t))["total"]
+    await bot.send_message(chat_id, "<i>Анастасия собирает отчет по отделу… это занимает до минуты</i>")
+    summary = None
+    try:
+        summary = await llm_json(own.team_summary_prompt(t, ps, STYLE, RULES), dict, MODEL_SMART, temperature=0.4, max_tokens=1200)
+    except Exception as e:
+        log.warning("team summary: %s", e)
+    lines = [f"📊 <b>Отчет по отделу «{esc(t['title'])}»</b>", f"Менеджеров – {len(ps)}, закончили – {sum(1 for p in ps if p['finished'])}"]
+    for p in sorted(ps, key=lambda p: -own.player_stats(p, tot)["meetings"]):
+        st = own.player_stats(p, tot)
+        lines.append(f"• <b>{esc(p['alias'])}</b> – встречи {st['meetings']} из {st['done']}, потери ~{short(st['loss'])}/мес")
+    if summary:
+        if summary.get("headline"):
+            lines.append(f"\n<b>{esc(summary['headline'])}</b>")
+        if summary.get("patterns"):
+            lines.append("<b>Повторяющиеся ошибки</b>\n" + "\n".join(f"• {esc(x)}" for x in summary["patterns"]))
+        if summary.get("growth"):
+            lines.append("<b>Точки роста</b>\n" + "\n".join(f"• {esc(x)}" for x in summary["growth"]))
+    lines.append("\nПолный отчет с перепиской и разбором каждого менеджера – в файле ниже. Откройте его в браузере.")
+    await send_long(bot, chat_id, "\n".join(lines))
+    data = own.report_html(t, ps, tot, summary).encode("utf-8")
+    await bot.send_document(chat_id, BufferedInputFile(data, filename=f"otchet-{tid}.html"))
+    await bot.send_message(chat_id, f"Хотите разобрать настоящие переписки вашего отдела? Напишите Анастасии – @{CONTACT}")
+
+
+async def start_team_game(bot, chat_id, uid, tid, alias):
+    t = own.team(tid)
+    g = Game(own.team_nums(t))
+    g.team, g.alias = tid, alias
+    g.pid = own.start_player(tid, uid, alias)
+    GAMES[uid] = g
+    await bot.send_message(chat_id, ref_text())
+    await open_client(bot, chat_id, g, 0)
+
+
 def save_stats(g):
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
@@ -407,9 +522,28 @@ def save_stats(g):
 
 # ---------------- обработчики ----------------
 @router.message(CommandStart())
-async def cmd_start(m: Message):
-    GAMES.pop(m.from_user.id, None)
-    WAIT_NUMS.discard(m.from_user.id)
+async def cmd_start(m: Message, command: CommandObject):
+    uid = m.from_user.id
+    GAMES.pop(uid, None)
+    WAIT_NUMS.discard(uid)
+    WAIT_CODE.discard(uid)
+    WAIT_TITLE.pop(uid, None)
+    WAIT_ALIAS.pop(uid, None)
+    arg = (command.args or "").strip()
+    if arg.startswith("t_"):
+        t = own.team(arg[2:])
+        if not t:
+            await m.answer("Ссылка устарела или неверная. Попросите руководителя прислать новую.")
+            return
+        if own.player_done(t["id"], uid):
+            await m.answer("Вы уже прошли эту проверку – результат у руководителя. Спасибо!")
+            return
+        WAIT_ALIAS[uid] = t["id"]
+        await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n"
+                       "Вы – менеджер застройщика в Алматы. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, "
+                       "онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.\n\n"
+                       "Как подписать вас в отчете? Напишите имя или любой псевдоним.", reply_markup=ReplyKeyboardRemove())
+        return
     await m.answer(START_TEXT, reply_markup=ReplyKeyboardRemove())
     await m.answer(nums_text(NUMS.get(m.from_user.id, DEFAULT_NUMBERS)), reply_markup=start_kb())
 
@@ -510,9 +644,107 @@ async def btn_left(m: Message):
     await close_client(m.bot, m.chat.id, g, "lost")
 
 
+@router.callback_query(F.data.in_({"own", "own_new"}))
+async def cb_own(q: CallbackQuery):
+    await q.answer()
+    if q.data == "own_new":
+        WAIT_CODE.add(q.from_user.id)
+        await q.message.answer("Пришлите код доступа для нового отдела.")
+        return
+    await owner_menu(q, q.from_user.id)
+
+
+@router.message(Command("team"))
+async def cmd_team(m: Message):
+    await owner_menu(m, m.from_user.id)
+
+
+@router.callback_query(F.data.startswith("r:"))
+async def cb_report(q: CallbackQuery):
+    await q.answer()
+    await send_report(q.bot, q.message.chat.id, q.data[2:], q.from_user.id)
+
+
+@router.callback_query(F.data.startswith("l:"))
+async def cb_link(q: CallbackQuery):
+    await q.answer()
+    t = own.team(q.data[2:])
+    if not t or t["owner_id"] != q.from_user.id:
+        return
+    link = team_link(await bot_name(q.bot), t["id"])
+    await q.message.answer("Перешлите это сообщение менеджерам:")
+    await q.message.answer(invite_text(t, link), disable_web_page_preview=True)
+
+
+@router.message(Command("code"))
+async def cmd_code(m: Message, command: CommandObject):
+    if not is_admin(m.from_user):
+        return
+    code = own.new_code(command.args or "")
+    await m.answer(f"Новый код доступа для собственника:\n<code>{code}</code>\n\nОн открывает режим «Проверить мой отдел продаж» для одного отдела.")
+
+
+@router.message(Command("codes"))
+async def cmd_codes(m: Message):
+    if not is_admin(m.from_user):
+        return
+    rows = own.list_codes()
+    if not rows:
+        await m.answer("Кодов пока нет. Создать – /code")
+        return
+    await m.answer("<b>Коды доступа</b>\n" + "\n".join(f"<code>{r['code']}</code> – {'использован' if r['used_by'] else 'свободен'}"
+                                                         + (f" · {esc(r['note'])}" if r['note'] else "") for r in rows))
+
+
+@router.message(Command("stats"))
+async def cmd_stats(m: Message):
+    if not is_admin(m.from_user):
+        return
+    games, week = 0, 0
+    try:
+        with open(os.path.join(DATA_DIR, "games.jsonl"), encoding="utf-8") as f:
+            for line in f:
+                games += 1
+                if json.loads(line).get("ts", 0) > time.time() - 7 * 86400:
+                    week += 1
+    except FileNotFoundError:
+        pass
+    teams = own.db().execute("SELECT COUNT(*) FROM teams").fetchone()[0]
+    pl = own.db().execute("SELECT COUNT(*) FROM players").fetchone()[0]
+    await m.answer(f"<b>Статистика</b>\nЗаконченных игр – {games}, за 7 дней – {week}\nОтделов – {teams}, менеджеров в отделах – {pl}\n"
+                   f"Оценка затрат на нейросеть – около ${games * 0.07:.2f} за все время (≈$0,07 за игру). Точные траты – platform.deepseek.com → Usage.")
+
+
 @router.message(F.text)
 async def on_text(m: Message):
     uid = m.from_user.id
+    if uid in WAIT_ALIAS:
+        alias = re.sub(r"\s+", " ", m.text).strip()[:40]
+        if not alias or alias.startswith("/"):
+            await m.answer("Напишите имя или псевдоним одним сообщением.")
+            return
+        tid = WAIT_ALIAS.pop(uid)
+        await start_team_game(m.bot, m.chat.id, uid, tid, alias)
+        return
+    if uid in WAIT_CODE:
+        code, err = own.use_code(m.text, uid)
+        if not code:
+            await m.answer(err + " Или нажмите /start, чтобы выйти.")
+            return
+        WAIT_CODE.discard(uid)
+        WAIT_TITLE[uid] = code
+        await m.answer("Код принят. Как назвать отдел в отчете? Например «Отдел продаж ЖК Тау».")
+        return
+    if uid in WAIT_TITLE:
+        title = re.sub(r"\s+", " ", m.text).strip()[:60] or "Отдел продаж"
+        code = WAIT_TITLE.pop(uid)
+        tid = own.create_team(uid, m.chat.id, title, code, NUMS.get(uid, DEFAULT_NUMBERS))
+        t = own.team(tid)
+        link = team_link(await bot_name(m.bot), tid)
+        await m.answer(f"Отдел «{esc(title)}» создан. Касса считается по вашим цифрам: {nums_text(own.team_nums(t))}\n\n"
+                       "Перешлите менеджерам сообщение ниже. Когда каждый закончит, я пришлю вам уведомление, а отчет по отделу можно открыть в любой момент – /team")
+        await m.answer(invite_text(t, link), disable_web_page_preview=True)
+        return
     if uid in WAIT_NUMS:
         nums = [float(x.replace(",", ".")) for x in re.findall(r"\d+(?:[.,]\d+)?", m.text)]
         if len(nums) < 4 or min(nums[:3]) <= 0:
