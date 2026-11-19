@@ -212,7 +212,8 @@ async def api_client(req):
     if "silent" in outcome:
         pauses = sum(1 for m in g.log if m["who"] == "pause")
         if not g.ghost or g.turns < 3:          # пропадать можно только «призракам» и не в самом начале
-            outcome = "continue"
+            outcome = "continue" if reply else "lost"
+            reply = reply or "Хорошо, подумаю."
         elif pauses >= 2:                       # уже дважды пропадал – дальше уходит совсем
             outcome, reply = "lost", ""
         else:
