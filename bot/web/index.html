@@ -281,7 +281,7 @@ function openClient(i){
   state.i = i; state.log = [{who:'client', text:c.first}]; state.turns = 0; state.closing = false; state.wrap = false;
   $('finishClient').textContent = 'Клиент ушел – закончить переписку';
   $('hAv').textContent = c.short; $('hName').textContent = c.name; $('hSub').textContent = c.sub;
-  $('msgs').innerHTML = ''; bubble('sys', `Клиент ${i+1} из ${CLIENTS.length}. Заявка пришла с рекламы в Instagram.`);
+  $('msgs').innerHTML = ''; bubble('sys', `Клиент ${i+1} из ${CLIENTS.length}. ${N.source || 'Заявка пришла с рекламы в Instagram.'}`);
   bubble('them', c.first);
   $('verdictBox').hidden = true; $('finishClient').hidden = false;
   setInput(true); turns(); renderTill();

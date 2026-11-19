@@ -120,7 +120,7 @@ def public_niche(n):
     return dict(id=n["id"], title=n["title"], project_name=n["project_name"], max_turns=n["max_turns"], nums=n["nums"], page=n["page"],
                 win=n["win"], win_sys=n["win_sys"], wins=n["wins"], reach=n["reach"], files=n["files"], random=random_pick,
                 country=n.get("country", "kz"), country_name=COUNTRIES.get(n.get("country", "kz"), ""), cur=n.get("cur", "₸"),
-                public=bool(n.get("public")), card=n.get("card", ""), stages=n.get("stages", []),
+                public=bool(n.get("public")), card=n.get("card", ""), stages=n.get("stages", []), source=n.get("source", ""),
                 clients=[dict(name=f"Клиент {k + 1}", short=str(k + 1), sub="откроется в игре", first="") for k in range(per)] if random_pick
                 else [public_client(c) for c in n["clients"]])
 
