@@ -361,7 +361,7 @@ def cash_text(g):
 
 
 START_TEXT = ("<b>Сколько денег ваш отдел продаж теряет в переписке</b>\n\n"
-              "Вы – менеджер застройщика в Алматы. Пять клиентов пишут вам в мессенджер. Отвечайте так, как отвечаете в работе.\n\n"
+              "Вы – менеджер застройщика в Алматы. Пять клиентов пишут вам в мессенджер. Отвечайте так же, как на работе.\n\n"
               "Задача – не продать квартиру за 10 минут, а довести клиента до встречи, онлайн или в офисе, где подбирают квартиру по шахматке и считают оплату.\n\n"
               "Каждый слитый клиент забирает пятую часть кассы. После каждой переписки – разбор по шагам от Анастасии Гавриш, как ответить, чтобы клиент не слился.")
 
@@ -436,9 +436,9 @@ async def close_client(bot, chat_id, g, outcome):
     t = till(g.nums)
     share = t["total"] / len(CLIENTS)
     g.results[g.i] = dict(lost=outcome != "meeting")
-    head = "🟢 <b>Встреча назначена.</b> Клиент остается в кассе." if outcome == "meeting" else f"🔴 <b>Клиент ушел.</b> Из кассы −{short(share)}."
+    head = "🟢 <b>Встреча назначена.</b> Деньги остаются в кассе." if outcome == "meeting" else f"🔴 <b>Клиент ушел.</b> Из кассы −{short(share)}."
     await bot.send_message(chat_id, head + "\n\n" + cash_text(g), reply_markup=ReplyKeyboardRemove())
-    await bot.send_message(chat_id, "<i>Анастасия читает переписку… обычно это занимает до минуты</i>")
+    await bot.send_message(chat_id, "<i>Анастасия читает переписку… Обычно это занимает до минуты</i>")
     stop = asyncio.Event()
     tl = asyncio.create_task(typing_loop(bot, chat_id, stop))
     turns = manager_turns(g.log)
@@ -520,12 +520,12 @@ async def finale(bot, chat_id, g):
     share = lost / len(done) if done else 0
     errs = [e for r in done for e in ((r.get("v") or {}).get("errors") or [])][:6]
     txt = (f"📊 <b>Итог по отделу</b>\n\n<b>−{short(share * t['total'])} в месяц</b>\n\n"
-           f"Пройдено клиентов – {len(done)} из {len(CLIENTS)}, до встречи дошли {len(done) - lost}. Если ваш менеджер так отвечает всем, "
+           f"Пройдено клиентов – {len(done)} из {len(CLIENTS)}, до встречи дошли – {len(done) - lost}. Если ваши менеджеры так отвечают всем клиентам, "
            f"при ваших цифрах отдел недополучает около <b>{short(share * t['total'])}</b> в месяц и <b>{short(share * t['total'] * 12)}</b> в год.")
     if errs:
         txt += "\n\n<b>Ошибки, которые повторялись</b>\n" + "\n".join(f"• {esc(e)}" for e in errs)
-    txt += ("\n\n<b>Реклама может приводить 100% целевых клиентов, но если менеджер сливает их в переписке, чем больше вы тратите на трафик, "
-            "тем больше теряете.</b>\n\n" + AUDIT_CTA)
+    txt += ("\n\n<b>Реклама может приводить только целевых клиентов. Но если менеджер сливает их в переписке, то чем больше вы "
+            "тратите на трафик, тем больше теряете.</b>\n\n" + AUDIT_CTA)
     await send_long(bot, chat_id, txt)
     await bot.send_message(chat_id, "Сыграть еще раз?", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔁 Пройти еще раз", callback_data="go")],
@@ -568,7 +568,7 @@ def invite_text(t, link):
     web_link = f"\n\nБез Telegram – на сайте: {WEBAPP_URL}/?team={t['id']}" if WEBAPP_URL else ""
     who = "клиентов застройщика" if n["id"].startswith("realestate") else "клиентов"
     return (f"Коллеги, пройдите, пожалуйста, короткую проверку переписки – это игра в Telegram. Пять {who} пишут вам в мессенджер, "
-            f"ваша задача – {n['goal'].replace('клиента', 'каждого')}. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}{web_link}")
+            f"ваша задача – {n['goal'].replace('клиента', 'каждого')}. Займет 20–30 минут. Отвечайте так же, как на работе.\n\n{link}{web_link}")
 
 
 def is_admin(u):
@@ -636,7 +636,7 @@ async def send_report(bot, chat_id, tid, uid):
         await bot.send_message(chat_id, "Пока никто из менеджеров не прошел ни одного клиента. Ссылка для команды:\n" + team_link(name, tid))
         return
     tot = till(own.team_nums(t))["total"]
-    await bot.send_message(chat_id, "<i>Анастасия собирает отчет по отделу… это занимает до минуты</i>")
+    await bot.send_message(chat_id, "<i>Анастасия собирает отчет по отделу… Обычно это занимает до минуты</i>")
     n = own.team_niche(t)
     await fill_missing_reviews(ps, own.team_nums(t), n["id"])
     summary = None
@@ -713,12 +713,12 @@ async def cmd_start(m: Message, command: CommandObject):
         WAIT_ALIAS[uid] = t["id"]
         await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n"
                        "Вы – менеджер застройщика в Алматы. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, "
-                       "онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.\n\n"
+                       "онлайн или в офисе. Отвечайте так же, как на работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.\n\n"
                        "Как подписать вас в отчете? Напишите имя или любой псевдоним.", reply_markup=ReplyKeyboardRemove())
         return
     if arg.startswith("n_") and arg[2:] in NICHES and WEBAPP_URL:
         n = NICHES[arg[2:]]
-        await m.answer(f"<b>Сколько отдел теряет в переписке – {esc(n['project_name'])}</b>\n\n{esc(n['page']['lead'])}",
+        await m.answer(f"<b>Сколько денег отдел продаж теряет в переписке – {esc(n['project_name'])}</b>\n\n{esc(n['page']['lead'])}",
                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                            text="▶️ Играть", web_app=WebAppInfo(url=f"{WEBAPP_URL}/?niche={n['id']}"))]]))
         return
