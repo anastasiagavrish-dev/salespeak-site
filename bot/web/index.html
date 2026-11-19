@@ -274,7 +274,8 @@ function bubble(cls, text){ const d=document.createElement('div'); d.className='
 
 function openClient(i){
   const c = CLIENTS[i];
-  state.i = i; state.log = [{who:'client', text:c.first}]; state.turns = 0; state.closing = false;
+  state.i = i; state.log = [{who:'client', text:c.first}]; state.turns = 0; state.closing = false; state.wrap = false;
+  $('finishClient').textContent = 'Клиент ушел – закончить переписку';
   $('hAv').textContent = c.short; $('hName').textContent = c.name; $('hSub').textContent = c.sub;
   $('msgs').innerHTML = ''; bubble('sys', `Клиент ${i+1} из ${CLIENTS.length}. Заявка пришла с рекламы в Instagram.`);
   bubble('them', c.first);
@@ -306,13 +307,21 @@ $('files').addEventListener('click', e => {
 });
 
 async function withRetry(fn){
-  try { return await fn(); } catch(e1){ if (e1 && (e1.code==='session' || e1.code==='limit')) throw e1; await new Promise(r=>setTimeout(r,1500)); return await fn(); }
+  // до 4 попыток: если сервер в этот момент обновляется, он поднимется за несколько секунд
+  for (let k = 0; ; k++){
+    try { return await fn(); }
+    catch(e){ if (k >= 3 || (e && (e.code==='session' || e.code==='limit'))) throw e; await new Promise(r=>setTimeout(r, 2500 * (k + 1))); }
+  }
 }
 
 async function send(e){
   e.preventDefault();
   if (busy || !state || state.closing) return;
   const text = $('txt').value.trim();
+  if (state.wrap){   // клиент уже согласился – менеджер дописывает ссылку и следующие шаги, клиент не отвечает
+    if(!text) return;
+    $('txt').value=''; bubble('me', text); state.log.push({who:'manager', text}); setInput(true); return;
+  }
   const fileWaiting = state.log.length && state.log[state.log.length-1].who==='manager';
   if(!text && !fileWaiting) return;
   if(text){ $('txt').value=''; bubble('me', text); state.log.push({who:'manager', text}); }
@@ -326,7 +335,8 @@ async function send(e){
     bubble('them', reply); state.log.push({who:'client', text:reply});
     const out = String((r && r.outcome) || '').toLowerCase();
     busy = false;
-    if (out.includes('meet') || out.includes('lost') || state.turns>=MAX_TURNS){ await closeClient(out.includes('meet') ? 'meeting' : 'lost'); }
+    if (out.includes('meet')) startWrap();
+    else if (out.includes('lost') || state.turns>=MAX_TURNS){ await closeClient('lost'); }
     else setInput(true);
   }catch(err){
     typing.remove();
@@ -334,6 +344,15 @@ async function send(e){
     else if (err && err.code==='limit') bubble('sys','Лимит ответов в этой игре исчерпан.');
     else { bubble('sys','Клиент не ответил – сбой связи. Нажмите «Отправить» еще раз.'); state.turns--; turns(); setInput(true); }
   } finally { busy=false; }
+}
+
+// Клиент согласился: даем менеджеру дописать завершающие сообщения – ссылку, подтверждение, что будет дальше
+function startWrap(){
+  state.wrap = true;
+  bubble('sys', `Клиент согласен ✅ Допишите, что нужно, – ссылку, подтверждение, следующие шаги – и нажмите «Готово – получить разбор».`);
+  $('finishClient').textContent = 'Готово – получить разбор'; $('finishClient').hidden = false;
+  if (TG) try { TG.HapticFeedback.notificationOccurred('success'); } catch(e){}
+  setInput(true);
 }
 
 async function closeClient(outcome){
@@ -437,7 +456,7 @@ $('finishGame').onclick = () => { if(state && !busy && doneCount()) finale(); };
 $('compose').addEventListener('submit', send);
 $('txt').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey && !TG){ e.preventDefault(); $('compose').requestSubmit(); }});
 $('start').onclick = () => { if (state && state.i>=0 && !confirm('Начать игру заново? Текущая переписка пропадет.')) return; startGame(); };
-$('finishClient').onclick = () => { if(state && !busy) closeClient('lost'); };
+$('finishClient').onclick = () => { if(state && !busy) closeClient(state.wrap ? 'meeting' : 'lost'); };
 
 // если менеджер закрыл игру, не дойдя до итога, – руководитель получит то, что уже пройдено
 function beaconPartial(){

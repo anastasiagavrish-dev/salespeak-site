@@ -28,6 +28,35 @@ K = None    # модуль kassa_bot (промпты, нейросеть, рас
 BOT = None
 
 
+def _store_path():
+    return os.path.join(os.environ.get("BOT_DATA", "/var/lib/kassa-bot"), "web_sessions.json")
+
+
+def save_sessions():
+    """Игры в процессе хранятся на диске, чтобы обновление сервера не обрывало их."""
+    try:
+        p = _store_path()
+        with open(p + ".tmp", "w") as f:
+            json.dump(dict(sessions=SESSIONS, starts=STARTS), f, ensure_ascii=False)
+        os.replace(p + ".tmp", p)
+    except Exception as e:
+        log.warning("save sessions: %s", e)
+
+
+def load_sessions():
+    try:
+        with open(_store_path()) as f:
+            d = json.load(f)
+        SESSIONS.update(d.get("sessions", {}))
+        STARTS.update({k: list(v) for k, v in d.get("starts", {}).items()})
+        gc()
+        log.info("restored %s web sessions", len(SESSIONS))
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        log.warning("load sessions: %s", e)
+
+
 def verify_init_data(init_data, token):
     """Проверка подписи Telegram Mini App. Возвращает пользователя или None."""
     try:
@@ -136,6 +165,7 @@ async def api_session(req):
         uid = user["id"] if user else -abs(hash(who)) % (10 ** 12)
         s["alias"], s["pid"] = alias, own.start_player(t["id"], uid, alias)
     SESSIONS[sid] = s
+    save_sessions()
     return web.json_response({"sid": sid, "nums": s["nums"], "niche": nid, "clients": [public_client(nc["clients"][i]) for i in s["pick"]], "team": {"title": t["title"]} if t else None,
                               "name": (user or {}).get("first_name", "")})
 
@@ -190,6 +220,7 @@ async def api_review(req):
         log.warning("steps: %s", e)
     merged = [dict(x, **(steps[k] if steps and k < len(steps) and isinstance(steps[k], dict) else {})) for k, x in enumerate(turns)] if steps is not None else None
     s["results"][g.i] = dict(lost=outcome != "meeting", v=v)
+    save_sessions()
     if s["pid"]:
         try:
             own.save_result(s["pid"], g.i, dict(lost=outcome != "meeting", v=v, steps=steps or [], log=g.log))
@@ -235,11 +266,13 @@ async def api_finish(req):
         # менеджер закрыл игру, не дойдя до конца
         if s["team"] and done and not s.get("partial_sent"):
             s["partial_sent"] = True
+            save_sessions()
             await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> закрыл или свернул игру, не дойдя до конца, отдел «{{team}}».\n"
                                   f"Пока пройдено клиентов – {len(done)} из {len(s['pick'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss, n['cur'])}</b> в месяц. "
                                   "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
         return web.json_response({"ok": True})
     s["finished"] = True
+    save_sessions()
     K.save_stats(SimpleNamespace(results=s["results"]))
     if s["team"] and s["pid"]:
         own.finish_player(s["pid"])
@@ -257,6 +290,7 @@ async def index(req):
 async def start(bot, kmod):
     global K, BOT
     K, BOT = kmod, bot
+    load_sessions()
     app = web.Application(client_max_size=256 * 1024)
     app.router.add_get("/", index)
     app.router.add_get("/favicon.ico", lambda req: web.FileResponse(os.path.join(WEB_DIR, "icon-180.png")))
