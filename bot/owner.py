@@ -207,12 +207,12 @@ def _e(s):
     return html.escape(str(s or ""))
 
 
-def _short(n):
+def _short(n, cur="₸"):
     if n >= 1e9:
-        return f"{n / 1e9:.1f}".replace(".", ",") + " млрд ₸"
+        return f"{n / 1e9:.1f}".replace(".", ",") + " млрд " + cur
     if n >= 1e6:
-        return f"{round(n / 1e6)} млн ₸"
-    return f"{round(n):,}".replace(",", " ") + " ₸"
+        return f"{round(n / 1e6)} млн " + cur
+    return f"{round(n):,}".replace(",", " ") + " " + cur
 
 
 def report_html(t, ps, total, summary=None):
@@ -226,7 +226,7 @@ def report_html(t, ps, total, summary=None):
         marks = "".join("<span class='m n'>–</span>" if not r else (f"<span class='m bad' title='{_e(CLIENTS[k]['name'])}'>✕</span>" if r.get("lost")
                         else f"<span class='m ok' title='{_e(CLIENTS[k]['name'])}'>✓</span>") for k, r in ((k, p["results"][k] if k < len(p["results"]) else None) for k in pick))
         rows.append(f"<tr><td><b>{_e(p['alias'])}</b>{'' if p['finished'] else ' <i>(не закончил)</i>'}</td><td>{marks}</td>"
-                    f"<td>{s['meetings']} из {s['done']}</td><td class='loss'>−{_short(s['loss'])}</td></tr>")
+                    f"<td>{s['meetings']} из {s['done']}</td><td class='loss'>−{_short(s['loss'], n['cur'])}</td></tr>")
         blocks = []
         for k, r in enumerate(p["results"]):
             if not r:
@@ -282,7 +282,7 @@ footer{{margin-top:48px;color:#6e6e73;font-size:14px}}
 <h1>Отчет по отделу – {_e(t['title'])}</h1>
 <p class="sub">Тренажер «Касса тает» · {_e(n['project_name'])} · менеджеров – {len(ps)} · {time.strftime('%d.%m.%Y')}</p>
 <div class="card"><p>Если отдел отвечает так всем заявкам, при ваших цифрах он недополучает в среднем</p>
-<p class="big">−{_short(tot_loss)} в месяц</p><p>Это −{_short(tot_loss * 12)} в год.</p></div>
+<p class="big">−{_short(tot_loss, n['cur'])} в месяц</p><p>Это −{_short(tot_loss * 12, n['cur'])} в год.</p></div>
 {sm}
 <h2>Менеджеры</h2>
 <table><tr><th>Менеджер</th><th>Клиенты</th><th>{n['wins'].capitalize()}</th><th>Потери в месяц</th></tr>{''.join(rows)}</table>

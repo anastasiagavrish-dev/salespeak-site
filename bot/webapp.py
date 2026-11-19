@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 import owner as own
-from game_data import NICHES, niche
+from game_data import COUNTRIES, NICHES, niche
 
 log = logging.getLogger("kassa.web")
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -90,6 +90,8 @@ def public_niche(n):
     random_pick = per < len(n["clients"])
     return dict(id=n["id"], title=n["title"], project_name=n["project_name"], max_turns=n["max_turns"], nums=n["nums"], page=n["page"],
                 win=n["win"], win_sys=n["win_sys"], wins=n["wins"], reach=n["reach"], files=n["files"], random=random_pick,
+                country=n.get("country", "kz"), country_name=COUNTRIES.get(n.get("country", "kz"), ""), cur=n.get("cur", "₸"),
+                public=bool(n.get("public")), card=n.get("card", ""),
                 clients=[dict(name=f"Клиент {k + 1}", short=str(k + 1), sub="откроется в игре", first="") for k in range(per)] if random_pick
                 else [public_client(c) for c in n["clients"]])
 
@@ -142,6 +144,15 @@ async def api_team(req):
     t = own.team(req.query.get("team", ""))
     return web.json_response({"title": t["title"], "nums": own.team_nums(t), "niche": own.team_niche(t)["id"]} if t else {"error": "team"},
                              status=200 if t else 404)
+
+
+# ниши, которые готовим следующими – показываем на экране выбора с пометкой «скоро»
+SOON = ["Клиника", "Салон красоты", "Онлайн-школа"]
+
+
+async def api_niches(req):
+    lst = [dict(id=n["id"], title=n["title"], country=n.get("country", "kz"), card=n.get("card", "")) for n in NICHES.values() if n.get("public")]
+    return web.json_response(dict(countries=COUNTRIES, niches=lst, soon=SOON), headers={"Cache-Control": "no-cache"})
 
 
 async def api_niche(req):
@@ -225,7 +236,7 @@ async def api_finish(req):
         if s["team"] and done and not s.get("partial_sent"):
             s["partial_sent"] = True
             await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> закрыл или свернул игру, не дойдя до конца, отдел «{{team}}».\n"
-                                  f"Пока пройдено клиентов – {len(done)} из {len(s['pick'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss)}</b> в месяц. "
+                                  f"Пока пройдено клиентов – {len(done)} из {len(s['pick'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss, n['cur'])}</b> в месяц. "
                                   "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
         return web.json_response({"ok": True})
     s["finished"] = True
@@ -233,7 +244,7 @@ async def api_finish(req):
     if s["team"] and s["pid"]:
         own.finish_player(s["pid"])
         await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> – проверка пройдена, отдел «{{team}}».\n"
-                              f"{n['wins'].capitalize()} – {len(done) - lost} из {len(done)}, потери – около <b>{K.short(loss)}</b> в месяц.")
+                              f"{n['wins'].capitalize()} – {len(done) - lost} из {len(done)}, потери – около <b>{K.short(loss, n['cur'])}</b> в месяц.")
     return web.json_response({"ok": True})
 
 
@@ -251,6 +262,7 @@ async def start(bot, kmod):
     app.router.add_get("/favicon.ico", lambda req: web.FileResponse(os.path.join(WEB_DIR, "icon-180.png")))
     app.router.add_get("/api/team", api_team)
     app.router.add_get("/api/niche", api_niche)
+    app.router.add_get("/api/niches", api_niches)
     app.router.add_post("/api/session", api_session)
     app.router.add_post("/api/client", api_client)
     app.router.add_post("/api/review", api_review)

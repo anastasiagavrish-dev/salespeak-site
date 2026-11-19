@@ -174,7 +174,9 @@ PROJECT_TEXT = (ABOUT + " Цены: " + "; ".join(f"{r[0]} ({r[1]}) – 10 мг 
                 + " ".join(f"{k}. {v}" for k, v in ITEMS))
 
 PEPTIDES = dict(
-    id="peptides", title="Пептиды", clients=CLIENTS, per_game=5, rules=RULES, tone=TONE, project_text=PROJECT_TEXT,
+    id="peptides", title="Пептиды", country="kz", cur="₸", public=False,
+    card="Пептиды для снижения веса, ProPeptides. Задача – оплата.",
+    clients=CLIENTS, per_game=5, rules=RULES, tone=TONE, project_text=PROJECT_TEXT,
     stages=["Контакт установлен", "Квалификация пройдена", "Медфильтр пройден", "Рекомендация дана", "Сомнения отработаны", "Заказ оформлен"],
     files=FILES, max_turns=10, nums=dict(budget=3_000_000, cpl=1_500, check=60_000, conv=15.0),
     project_name="ProPeptides",

@@ -46,16 +46,16 @@ CHAT_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=BTN_FILE), Keyboard
 
 
 # ---------------- деньги ----------------
-def money(n):
-    return f"{round(n):,}".replace(",", " ") + " ₸"
+def money(n, cur="₸"):
+    return f"{round(n):,}".replace(",", " ") + " " + cur
 
 
-def short(n):
+def short(n, cur="₸"):
     if n >= 1e9:
-        return f"{n / 1e9:.1f}".replace(".", ",") + " млрд ₸"
+        return f"{n / 1e9:.1f}".replace(".", ",") + " млрд " + cur
     if n >= 1e6:
-        return f"{round(n / 1e6)} млн ₸"
-    return money(n)
+        return f"{round(n / 1e6)} млн " + cur
+    return money(n, cur)
 
 
 def till(nums):
@@ -339,11 +339,11 @@ def start_kb():
                                                  [InlineKeyboardButton(text="👔 Проверить мой отдел продаж", callback_data="own")]])
 
 
-def nums_text(n, check="средняя квартира"):
+def nums_text(n, check="средняя квартира", cur="₸"):
     t = till(n)
-    return (f"Цифры для кассы – реклама {money(n['budget'])} в месяц, лид {money(n['cpl'])}, {check} {money(n['check'])}, "
+    return (f"Цифры для кассы – реклама {money(n['budget'], cur)} в месяц, лид {money(n['cpl'], cur)}, {check} {money(n['check'], cur)}, "
             f"норма лид → сделка {('%g' % n['conv']).replace('.', ',')}%.\nЭто {round(t['leads'])} лидов и {t['deals']:.1f} сделок в месяц – "
-            f"касса {short(t['total'])}.".replace(".0 сделок", " сделок"))
+            f"касса {short(t['total'], cur)}.".replace(".0 сделок", " сделок"))
 
 
 # ---------------- игра ----------------
@@ -530,7 +530,7 @@ def team_link(name, tid):
 def invite_text(t, link):
     n = own.team_niche(t)
     web_link = f"\n\nБез Telegram – на сайте: {WEBAPP_URL}/?team={t['id']}" if WEBAPP_URL else ""
-    who = "клиентов застройщика" if n["id"] == "realestate" else "клиентов"
+    who = "клиентов застройщика" if n["id"].startswith("realestate") else "клиентов"
     return (f"Коллеги, пройдите, пожалуйста, короткую проверку переписки – это игра в Telegram. Пять {who} пишут вам в мессенджер, "
             f"ваша задача – {n['goal'].replace('клиента', 'каждого')}. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}{web_link}")
 
@@ -611,7 +611,7 @@ async def send_report(bot, chat_id, tid, uid):
     lines = [f"📊 <b>Отчет по отделу «{esc(t['title'])}»</b>", f"Менеджеров – {len(ps)}, закончили – {sum(1 for p in ps if p['finished'])}"]
     for p in sorted(ps, key=lambda p: -own.player_stats(p, tot)["meetings"]):
         st = own.player_stats(p, tot)
-        lines.append(f"• <b>{esc(p['alias'])}</b> – {n['wins']} {st['meetings']} из {st['done']}, потери ~{short(st['loss'])}/мес")
+        lines.append(f"• <b>{esc(p['alias'])}</b> – {n['wins']} {st['meetings']} из {st['done']}, потери ~{short(st['loss'], n['cur'])}/мес")
     if summary:
         if summary.get("headline"):
             lines.append(f"\n<b>{esc(summary['headline'])}</b>")
@@ -891,7 +891,7 @@ async def on_text(m: Message):
         tid = own.create_team(uid, m.chat.id, title, code, NUMS.get(uid, DEFAULT_NUMBERS) if nid == "realestate" else niche(nid)["nums"], nid)
         t = own.team(tid)
         link = team_link(await bot_name(m.bot), tid)
-        await m.answer(f"Отдел «{esc(title)}» создан. Касса считается по цифрам: {nums_text(own.team_nums(t), own.team_niche(t)['page']['check'].replace(', ₸', '').lower())}\n\n"
+        await m.answer(f"Отдел «{esc(title)}» создан. Касса считается по цифрам: {nums_text(own.team_nums(t), own.team_niche(t)['page']['check'].split(',')[0].lower(), own.team_niche(t)['cur'])}\n\n"
                        "Перешлите менеджерам сообщение ниже. Когда каждый закончит, я пришлю вам уведомление, а отчет по отделу можно открыть в любой момент – /team")
         await m.answer(invite_text(t, link), disable_web_page_preview=True)
         return

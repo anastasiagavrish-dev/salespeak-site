@@ -122,6 +122,18 @@ body.tg header .lead{font-size:14px}
 .ref .tbl{overflow-x:auto;margin-top:10px}
 .ref ul{margin:10px 0 0;padding-left:18px;display:grid;gap:4px}
 .ref td.nw{white-space:nowrap}
+.picker{display:grid;gap:16px;margin-bottom:16px}
+.seg{display:inline-flex;gap:4px;border:1px solid var(--line);border-radius:999px;padding:4px}
+.seg button{background:transparent;color:var(--ink);padding:9px 16px;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--card)}
+.ncards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.ncard{background:var(--chat-bg);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:18px;text-align:left;display:grid;gap:8px;align-content:start;font:500 14px/1.4 var(--body)}
+.ncard b{font:700 17px/1.2 var(--display)}
+.ncard:hover{background:var(--chat-bg);color:var(--ink);border-color:var(--violet)}
+.ncard[disabled]{opacity:.55}
+.ncard .soon{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+#nicheBar{margin:0 0 12px}
+#nicheBar a{color:var(--violet)}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 </style>
 </head>
@@ -134,6 +146,13 @@ body.tg header .lead{font-size:14px}
   </header>
 
   <div id="err" class="warn" hidden></div>
+  <div id="picker" class="card picker" hidden>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <p class="label" style="margin:0">Выберите нишу</p>
+      <div class="seg" id="countries" role="group" aria-label="Страна"></div>
+    </div>
+    <div class="ncards" id="ncards"></div>
+  </div>
   <div id="teamBox" class="card team" hidden>
     <p class="label">Проверка отдела продаж</p>
     <h2 id="teamTitle"></h2>
@@ -141,8 +160,9 @@ body.tg header .lead{font-size:14px}
     <form id="aliasForm" class="row"><input id="alias" maxlength="40" placeholder="Как подписать вас в отчете – имя или псевдоним" required><button>Начать проверку</button></form>
   </div>
 
+  <p id="nicheBar" class="note" hidden>Ниша – <b id="nicheName"></b> · <a href="#" id="changeNiche">сменить</a></p>
   <div class="mcash" id="mcash" aria-hidden="true"><span>Касса <b id="mcashV">–</b></span><span class="lost" id="mcashL"></span></div>
-  <div class="grid">
+  <div class="grid" id="gameGrid">
     <aside class="card till" aria-label="Касса отдела">
       <div>
         <p class="label">Касса месяца</p>
@@ -152,8 +172,8 @@ body.tg header .lead{font-size:14px}
       <div class="bar" aria-hidden="true"><i id="bar" style="width:100%"></i></div>
       <div>Потеряно: <span class="lost" id="lost">0 ₸</span></div>
       <div class="inputs">
-        <label for="budget">Реклама, ₸ в мес.<input id="budget" inputmode="numeric" value="3 000 000"></label>
-        <label for="cpl">Стоимость лида, ₸<input id="cpl" inputmode="numeric" value="6 000"></label>
+        <label for="budget"><span id="pBudget">Реклама, ₸ в мес.</span><input id="budget" inputmode="numeric" value="3 000 000"></label>
+        <label for="cpl"><span id="pCpl">Стоимость лида, ₸</span><input id="cpl" inputmode="numeric" value="6 000"></label>
         <label for="check"><span id="pCheck">Средний чек, ₸</span><input id="check" inputmode="numeric" value="45 000 000"></label>
         <label for="conv">Норма лид → сделка, %<input id="conv" inputmode="decimal" value="2"></label>
       </div>
@@ -219,12 +239,14 @@ async function api(path, body){
 function showErr(html){ $('err').innerHTML = html; $('err').hidden = !html; }
 
 function num(v){ return Number(String(v).replace(/[^\d.,]/g,'').replace(',','.')) || 0; }
-function money(n){ return Math.round(n).toLocaleString('ru-RU').replace(/ /g,' ') + ' ₸'; }
-function short(n){ if (n>=1e9) return (n/1e9).toFixed(1).replace('.',',')+' млрд ₸'; if (n>=1e6) return Math.round(n/1e6)+' млн ₸'; return money(n); }
+function cur(){ return (N && N.cur) || '₸'; }
+function plain(n){ return Math.round(n).toLocaleString('ru-RU').replace(/ /g,' '); }
+function money(n){ return plain(n) + ' ' + cur(); }
+function short(n){ if (n>=1e9) return (n/1e9).toFixed(1).replace('.',',')+' млрд '+cur(); if (n>=1e6) return Math.round(n/1e6)+' млн '+cur(); return money(n); }
 function nums(){ return {budget:num($('budget').value), cpl:num($('cpl').value), check:num($('check').value), conv:num($('conv').value)}; }
 function setNums(n){
-  $('budget').value = money(n.budget).replace(' ₸',''); $('cpl').value = money(n.cpl).replace(' ₸','');
-  $('check').value = money(n.check).replace(' ₸',''); $('conv').value = String(n.conv).replace('.',',');
+  $('budget').value = plain(n.budget); $('cpl').value = plain(n.cpl);
+  $('check').value = plain(n.check); $('conv').value = String(n.conv).replace('.',',');
 }
 function till(){
   const n = nums(); const leads = n.budget/Math.max(1,n.cpl); const deals = leads*n.conv/100;
@@ -424,10 +446,50 @@ function beaconPartial(){
 }
 window.addEventListener('pagehide', beaconPartial);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') beaconPartial(); });
+// ---------- выбор страны и ниши ----------
+let NICHE_LIST = null;
+function guessCountry(){
+  try{ const c = localStorage.getItem('kt_country'); if (c) return c; }catch(e){}
+  const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+  return /^Asia\/(Almaty|Qostanay|Aqtobe|Aqtau|Oral|Qyzylorda|Atyrau)$/.test(tz) ? 'kz' : 'ru';
+}
+function renderPicker(country){
+  try{ localStorage.setItem('kt_country', country); }catch(e){}
+  $('countries').innerHTML = Object.entries(NICHE_LIST.countries).map(([id,name]) =>
+    `<button type="button" data-c="${id}" aria-pressed="${id===country}">${esc(name)}</button>`).join('');
+  $('countries').querySelectorAll('button').forEach(b => b.onclick = () => renderPicker(b.dataset.c));
+  const live = NICHE_LIST.niches.filter(n => n.country===country);
+  const soon = NICHE_LIST.soon.filter(t => !live.some(n => n.title===t));
+  $('ncards').innerHTML = live.map(n => `<button type="button" class="ncard" data-id="${n.id}"><b>${esc(n.title)}</b><span>${esc(n.card)}</span></button>`).join('')
+    + soon.map(t => `<button type="button" class="ncard" disabled><b>${esc(t)}</b><span class="soon">скоро</span></button>`).join('');
+  $('ncards').querySelectorAll('[data-id]').forEach(b => b.onclick = () => chooseNiche(b.dataset.id));
+}
+async function showPicker(){
+  if (!NICHE_LIST){ const r = await fetch('/api/niches'); if (!r.ok) throw new Error('niches'); NICHE_LIST = await r.json(); }
+  $('gameGrid').hidden = true; $('mcash').hidden = true; $('nicheBar').hidden = true; $('picker').hidden = false;
+  $('pLabel').textContent = 'Тренажер-диагностика'; document.title = 'Касса тает – тренажер переписки';
+  $('pLead').textContent = 'Пять клиентов пишут вам в мессенджер. Вы отвечаете так, как отвечаете в работе, а касса тает с каждым слитым клиентом. После каждой переписки – разбор в стиле Анастасии Гавриш.';
+  renderPicker(guessCountry());
+}
+async function chooseNiche(id){
+  if (busy) return;
+  try{ await loadNiche(id); }catch(e){ showErr('Не получилось открыть нишу – сбой связи. Попробуйте еще раз.'); return; }
+  state = null; sid = null; $('verdictBox').hidden = true; $('finalBox').hidden = true; $('finishGame').hidden = true;
+  $('start').textContent = 'Начать'; $('msgs').innerHTML = ''; bubble('sys', N.page.task); renderTill();
+  $('hAv').textContent = '?'; $('hName').textContent = 'Нажмите «Начать»'; $('hSub').textContent = 'клиент напишет первым'; setInput(false);
+  try{ history.replaceState(null, '', '?niche=' + encodeURIComponent(id)); }catch(e){}
+  $('picker').hidden = true; $('gameGrid').hidden = false; $('mcash').hidden = false;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+$('changeNiche').onclick = e => { e.preventDefault(); if (!busy) showPicker().catch(()=>showErr('Сбой связи. Обновите страницу.')); };
+
 function applyNiche(n){
   N = n; CLIENTS = n.clients; FILES = n.files; MAX_TURNS = n.max_turns;
   $('pLabel').textContent = n.page.label; $('pLead').textContent = n.page.lead; $('pTeam').textContent = n.page.team;
   $('pTask').textContent = n.page.task; $('pCheck').textContent = n.page.check; $('pRef').textContent = n.page.ref.title;
+  $('pBudget').textContent = 'Реклама, ' + n.cur + ' в мес.'; $('pCpl').textContent = 'Стоимость лида, ' + n.cur;
+  $('lost').textContent = '0 ' + n.cur;
+  $('nicheName').textContent = n.title + (n.country_name ? ', ' + n.country_name : ''); $('nicheBar').hidden = !n.public || !!TEAM;
   document.title = 'Касса тает – ' + n.project_name;
   setNums(n.nums); renderRef(); renderTill();
 }
@@ -448,7 +510,8 @@ async function init(){
       ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true);
       const nm = TG && TG.initDataUnsafe && TG.initDataUnsafe.user && TG.initDataUnsafe.user.first_name; if (nm) $('alias').value = nm;
     } else {
-      await loadNiche(params.get('niche') || (TG && TG.initDataUnsafe && (TG.initDataUnsafe.start_param||'').startsWith('n_') ? TG.initDataUnsafe.start_param.slice(2) : ''));
+      const want = params.get('niche') || (TG && TG.initDataUnsafe && (TG.initDataUnsafe.start_param||'').startsWith('n_') ? TG.initDataUnsafe.start_param.slice(2) : '');
+      if (want) await loadNiche(want); else await showPicker();
     }
   }catch(e){ showErr('Не получилось открыть игру – сбой связи. Обновите страницу.'); return; }
   finally { $('start').disabled = false; }
