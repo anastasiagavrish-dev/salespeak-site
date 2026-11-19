@@ -396,6 +396,7 @@ function finale(){
   const allErr = done.flatMap(r=>(r.v&&r.v.errors)||[]).slice(0,6);
   const box = $('finalBox'); box.hidden=false;
   setInput(false); $('finishClient').hidden=true; $('finishGame').hidden=true;
+  state.finished = true;
   api('/api/finish', {sid}).catch(()=>{});
   const teamNote = teamInfo ? `<p><b>Результат и разборы отправлены руководителю.</b> Спасибо, что прошли проверку!</p>` : '';
   box.innerHTML = `<p class="label">${teamInfo ? 'Ваш итог' : 'Итог по отделу'}</p>
@@ -441,6 +442,13 @@ $('start').onclick = () => { if (state && state.i>=0 && !confirm('Начать �
 $('finishClient').onclick = () => { if(state && !busy) closeClient('lost'); };
 
 renderRef(); renderTill();
+// если менеджер закрыл игру, не дойдя до итога, – руководитель получит то, что уже пройдено
+function beaconPartial(){
+  if (!sid || !teamInfo || !state || state.finished || !doneCount()) return;
+  try { navigator.sendBeacon('/api/finish', JSON.stringify({sid, partial:true})); } catch(e){}
+}
+window.addEventListener('pagehide', beaconPartial);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') beaconPartial(); });
 if (TEAM){
   fetch('/api/team?team=' + encodeURIComponent(TEAM)).then(r=>r.json()).then(t=>{
     if (t.error){ showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.'); return; }

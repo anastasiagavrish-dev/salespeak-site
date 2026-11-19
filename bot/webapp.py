@@ -160,31 +160,55 @@ async def api_review(req):
             own.save_result(s["pid"], g.i, dict(lost=outcome != "meeting", v=v, steps=steps or [], log=g.log))
         except Exception as e:
             log.warning("save_result: %s", e)
+        if not s.get("start_sent"):
+            s["start_sent"] = True
+            await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> начал проверку, отдел «{{team}}». Первый клиент – "
+                                  f"{'встреча назначена' if outcome == 'meeting' else 'слит'}. Итог пришлю, когда закончит.")
     return web.json_response({"v": v, "steps": merged})
 
 
+async def notify_owner(s, text):
+    t = own.team(s["team"]) if s.get("team") else None
+    if not t or not BOT:
+        return
+    try:
+        await BOT.send_message(t["owner_chat"], text.replace("{team}", K.esc(t["title"])),
+                               reply_markup=K.InlineKeyboardMarkup(inline_keyboard=[[K.InlineKeyboardButton(text="📊 Отчет по отделу", callback_data=f"r:{t['id']}")]]))
+    except Exception as e:
+        log.warning("notify owner: %s", e)
+
+
+def score(s):
+    done = [r for r in s["results"] if r]
+    lost = sum(1 for r in done if r["lost"])
+    tot = K.till(s["nums"])["total"]
+    return done, lost, (lost / len(done) if done else 0) * tot
+
+
 async def api_finish(req):
-    data = await req.json()
+    # sendBeacon присылает text/plain – читаем тело как JSON вручную
+    try:
+        data = json.loads(await req.text() or "{}")
+    except Exception:
+        data = {}
     s = SESSIONS.get(str(data.get("sid", "")))
     if not s or s.get("finished"):
         return web.json_response({"ok": True})
+    done, lost, loss = score(s)
+    if data.get("partial"):
+        # менеджер закрыл игру, не дойдя до конца
+        if s["team"] and done and not s.get("partial_sent"):
+            s["partial_sent"] = True
+            await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> закрыл или свернул игру, не дойдя до конца, отдел «{{team}}».\n"
+                                  f"Пока пройдено клиентов – {len(done)} из {len(CLIENTS)}, встречи – {len(done) - lost}, потери – около <b>{K.short(loss)}</b> в месяц. "
+                                  "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
+        return web.json_response({"ok": True})
     s["finished"] = True
-    g = SimpleNamespace(results=s["results"])
-    K.save_stats(g)
+    K.save_stats(SimpleNamespace(results=s["results"]))
     if s["team"] and s["pid"]:
         own.finish_player(s["pid"])
-        t = own.team(s["team"])
-        done = [r for r in s["results"] if r]
-        lost = sum(1 for r in done if r["lost"])
-        tot = K.till(s["nums"])["total"]
-        share = lost / len(done) if done else 0
-        if t and BOT:
-            try:
-                await BOT.send_message(t["owner_chat"], f"👤 <b>{K.esc(s['alias'])}</b> – проверка пройдена, отдел «{K.esc(t['title'])}».\n"
-                                       f"Встречи – {len(done) - lost} из {len(done)}, потери – около <b>{K.short(share * tot)}</b> в месяц.",
-                                       reply_markup=K.InlineKeyboardMarkup(inline_keyboard=[[K.InlineKeyboardButton(text="📊 Отчет по отделу", callback_data=f"r:{t['id']}")]]))
-            except Exception as e:
-                log.warning("notify owner: %s", e)
+        await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> – проверка пройдена, отдел «{{team}}».\n"
+                              f"Встречи – {len(done) - lost} из {len(done)}, потери – около <b>{K.short(loss)}</b> в месяц.")
     return web.json_response({"ok": True})
 
 
