@@ -27,6 +27,7 @@ def db():
         CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY AUTOINCREMENT, team_id TEXT, tg_id INT, alias TEXT,
                                            started INT, finished INT, results TEXT);
         CREATE INDEX IF NOT EXISTS players_team ON players(team_id);
+        CREATE TABLE IF NOT EXISTS vip(key TEXT PRIMARY KEY, note TEXT, created INT);
         """)
         # ниша игры (недвижимость, пептиды…) – у кода и у отдела
         for tbl in ("codes", "teams"):
@@ -41,6 +42,19 @@ def db():
 
 def _rand(n, alphabet=string.ascii_uppercase + string.digits):
     return "".join(secrets.choice(alphabet) for _ in range(n))
+
+
+# ---------------- безлимитные ключи (игра без дневного лимита) ----------------
+def new_vip(note=""):
+    key = _rand(16, string.ascii_letters + string.digits)
+    db().execute("INSERT INTO vip(key, note, created) VALUES(?,?,?)", (key, note, int(time.time())))
+    db().commit()
+    return key
+
+
+def vip_ok(key):
+    key = str(key or "").strip()
+    return bool(key) and db().execute("SELECT 1 FROM vip WHERE key=?", (key,)).fetchone() is not None
 
 
 # ---------------- коды доступа ----------------

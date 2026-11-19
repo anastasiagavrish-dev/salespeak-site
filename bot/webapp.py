@@ -144,7 +144,8 @@ async def api_session(req):
     if not t:
         day = time.time() - 86400
         STARTS[who] = [x for x in STARTS[who] if x > day]
-        if len(STARTS[who]) >= K.GAMES_PER_DAY and not (user and (user.get("username") or "").lower() in K.ADMINS):
+        unlimited = (user and (user.get("username") or "").lower() in K.ADMINS) or own.vip_ok(data.get("vip"))
+        if len(STARTS[who]) >= K.GAMES_PER_DAY and not unlimited:
             return web.json_response({"error": "daily", "limit": K.GAMES_PER_DAY}, status=429)
         STARTS[who].append(time.time())
     nid = own.team_niche(t)["id"] if t else (data.get("niche") if data.get("niche") in NICHES else "realestate")

@@ -222,6 +222,10 @@ const CONTACT = "gavrish_anastasiya";
 const $ = id => document.getElementById(id);
 const TG = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData ? window.Telegram.WebApp : null;
 const params = new URLSearchParams(location.search);
+// безлимитный ключ: ?vip=... запоминаем в браузере и убираем из адресной строки
+let VIP = params.get('vip') || '';
+try { if (VIP) localStorage.setItem('kt_vip', VIP); else VIP = localStorage.getItem('kt_vip') || ''; } catch(e){}
+if (params.get('vip')) try { params.delete('vip'); history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash); } catch(e){}
 const TEAM = params.get('team') || (TG && TG.initDataUnsafe && (TG.initDataUnsafe.start_param||'').replace(/^t_/,'')) || '';
 let state = null, busy = false, sid = null, teamInfo = null, alias = '';
 
@@ -458,7 +462,7 @@ async function startGame(){
   if (busy) return;
   showErr(''); $('start').disabled = true;
   try{
-    const r = await api('/api/session', {initData: TG ? TG.initData : '', team: TEAM, niche: N.id, alias, nums: teamInfo ? null : nums()});
+    const r = await api('/api/session', {initData: TG ? TG.initData : '', team: TEAM, niche: N.id, alias, vip: VIP, nums: teamInfo ? null : nums()});
     sid = r.sid; setNums(r.nums);
     if (Array.isArray(r.clients) && r.clients.length) CLIENTS = r.clients;   // в каждой игре свои клиенты
   }catch(err){

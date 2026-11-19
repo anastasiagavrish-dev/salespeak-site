@@ -748,7 +748,7 @@ async def cb_go(q: CallbackQuery):
     uid = q.from_user.id
     day = time.time() - 86400
     PLAYS[uid] = [x for x in PLAYS[uid] if x > day]
-    if len(PLAYS[uid]) >= GAMES_PER_DAY:
+    if len(PLAYS[uid]) >= GAMES_PER_DAY and not is_admin(q.from_user):
         await q.answer()
         await q.message.answer(f"На сегодня лимит – {GAMES_PER_DAY} игры. Возвращайтесь завтра или напишите Анастасии – @{CONTACT}")
         return
@@ -869,6 +869,17 @@ async def cmd_code(m: Message, command: CommandObject):
     await m.answer(f"Новый код доступа для собственника, ниша «{NICHES[nid]['title']}»:\n<code>{code}</code>\n\n"
                    "Он открывает режим «Проверить мой отдел продаж» для одного отдела.\n"
                    f"Другие ниши: {', '.join(f'/code {k}' for k in NICHES if k != nid)}")
+
+
+@router.message(Command("vip"))
+async def cmd_vip(m: Message, command: CommandObject):
+    """Ссылка на игру без дневного лимита – для себя или клиента."""
+    if not is_admin(m.from_user):
+        return
+    key = own.new_vip((command.args or "").strip())
+    base = WEBAPP_URL or "https://game.a-gavrish.com"
+    await m.answer(f"Безлимитная ссылка на игру:\n{base}/?vip={key}\n\nОткройте ее один раз в браузере – дальше игра в этом браузере "
+                   "без лимита 3 игры в день. Ссылку можно отдать клиенту, она работает для любого, кто ее откроет.")
 
 
 @router.message(Command("codes"))
