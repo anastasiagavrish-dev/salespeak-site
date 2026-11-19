@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from collections import defaultdict
 
@@ -15,7 +16,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ChatAction, ParseMode
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
-                           ReplyKeyboardMarkup, ReplyKeyboardRemove)
+                           MenuButtonWebApp, ReplyKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo)
 
 import owner as own
 from game_data import CLIENTS, DEFAULT_NUMBERS, FILES, MAX_TURNS, PROJECT, PROJECT_TEXT, RULES, STAGES
@@ -31,6 +32,7 @@ DATA_DIR = os.environ.get("BOT_DATA", "/var/lib/kassa-bot")
 CONTACT = os.environ.get("CONTACT", "gavrish_anastasiya")
 ADMINS = {x.strip().lstrip("@").lower() for x in os.environ.get("ADMIN_USERNAMES", "gavrish_anastasiya").split(",") if x.strip()}
 BOT_NAME = {"v": ""}
+WEBAPP_URL = os.environ.get("WEBAPP_URL", "").rstrip("/")  # если задан – игра открывается мини-приложением
 
 log = logging.getLogger("kassa")
 router = Router()
@@ -248,6 +250,9 @@ START_TEXT = ("<b>Сколько ваш отдел теряет в перепи�
 
 
 def start_kb():
+    if WEBAPP_URL:
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="▶️ Играть", web_app=WebAppInfo(url=WEBAPP_URL + "/"))],
+                                                     [InlineKeyboardButton(text="👔 Проверить мой отдел продаж", callback_data="own")]])
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="▶️ Начать игру", callback_data="go")],
                                                  [InlineKeyboardButton(text="🔢 Подставить свои цифры", callback_data="nums")],
                                                  [InlineKeyboardButton(text="👔 Проверить мой отдел продаж", callback_data="own")]])
@@ -442,8 +447,9 @@ def team_link(name, tid):
 
 
 def invite_text(t, link):
+    web_link = f"\n\nБез Telegram – на сайте: {WEBAPP_URL}/?team={t['id']}" if WEBAPP_URL else ""
     return (f"Коллеги, пройдите, пожалуйста, короткую проверку переписки – это игра в Telegram. Пять клиентов застройщика пишут вам в мессенджер, "
-            f"ваша задача – довести их до встречи. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}")
+            f"ваша задача – довести их до встречи. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}{web_link}")
 
 
 def is_admin(u):
@@ -538,6 +544,13 @@ async def cmd_start(m: Message, command: CommandObject):
         if own.player_done(t["id"], uid):
             await m.answer("Вы уже прошли эту проверку – результат у руководителя. Спасибо!")
             return
+        if WEBAPP_URL:
+            await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n"
+                           "Вы – менеджер застройщика в Алматы. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, "
+                           "онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.",
+                           reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                               text="▶️ Начать проверку", web_app=WebAppInfo(url=f"{WEBAPP_URL}/?team={t['id']}"))]]))
+            return
         WAIT_ALIAS[uid] = t["id"]
         await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n"
                        "Вы – менеджер застройщика в Алматы. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, "
@@ -545,6 +558,9 @@ async def cmd_start(m: Message, command: CommandObject):
                        "Как подписать вас в отчете? Напишите имя или любой псевдоним.", reply_markup=ReplyKeyboardRemove())
         return
     await m.answer(START_TEXT, reply_markup=ReplyKeyboardRemove())
+    if WEBAPP_URL:
+        await m.answer("Игра откроется прямо здесь, в Telegram. Свои цифры кассы можно подставить на первом экране.", reply_markup=start_kb())
+        return
     await m.answer(nums_text(NUMS.get(m.from_user.id, DEFAULT_NUMBERS)), reply_markup=start_kb())
 
 
@@ -776,6 +792,13 @@ async def main():
     dp = Dispatcher()
     dp.include_router(router)
     await bot.delete_webhook(drop_pending_updates=True)
+    import webapp
+    await webapp.start(bot, sys.modules[__name__])
+    if WEBAPP_URL:
+        try:
+            await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Играть", web_app=WebAppInfo(url=WEBAPP_URL + "/")))
+        except Exception as e:
+            log.warning("menu button: %s", e)
     await dp.start_polling(bot)
 
 

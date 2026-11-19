@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Касса тает – тренажер переписки</title>
+<meta name="description" content="Тренажер-диагностика переписки отдела продаж от Анастасии Гавриш">
+<meta name="robots" content="noindex">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+/* Тренажер-диагностика: слева касса отдела, справа переписка с клиентом в мессенджере */
+:root{
+  --bg:#EFEEFB; --card:#FFFFFF; --ink:#17152B; --muted:#5C5A72; --line:#DAD8EC;
+  --violet:#4B3FE1; --lime:#D6F479; --bad:#C2261B; --ok:#1F8A4C;
+  --bubble-me:#E4E1FF; --bubble-them:#FFFFFF; --chat-bg:#F6F5FD;
+  --display:"Unbounded","Montserrat",system-ui,sans-serif; --body:"Montserrat",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:18px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121022; --card:#1C1A30; --ink:#F1F0FA; --muted:#A9A7C2; --line:#2E2B49;
+  --violet:#8C82FF; --lime:#D6F479; --bad:#FF6B5E; --ok:#5ED68E;
+  --bubble-me:#2F2A66; --bubble-them:#24213A; --chat-bg:#17152B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121022; --card:#1C1A30; --ink:#F1F0FA; --muted:#A9A7C2; --line:#2E2B49;
+  --violet:#8C82FF; --lime:#D6F479; --bad:#FF6B5E; --ok:#5ED68E;
+  --bubble-me:#2F2A66; --bubble-them:#24213A; --chat-bg:#17152B; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:20px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(24px,3.4vw,38px);font-weight:600;line-height:1.1}
+.lead{color:var(--muted);max-width:720px;margin:8px 0 0}
+.label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+button{font:600 15px/1 var(--body);border:0;border-radius:999px;padding:13px 20px;cursor:pointer;background:var(--ink);color:var(--card)}
+button:hover{background:var(--violet);color:#fff}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--violet);outline-offset:2px}
+button[disabled]{opacity:.5;cursor:default}
+.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.ghost:hover{background:var(--card);color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}
+  .till{position:static;order:2} .grid>section{order:1}
+  .mcash{display:flex}
+  .msgs{max-height:58vh} .chat{min-height:0}}
+.mcash{display:none;position:sticky;top:0;z-index:5;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;margin:0 -4px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;font-weight:600;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px rgba(23,21,43,.08)}
+.mcash b{font:700 18px/1 var(--display)} .mcash .lost{font-size:14px}
+/* касса */
+.till{display:grid;gap:14px;position:sticky;top:16px}
+.cash{font:700 clamp(30px,3.6vw,40px)/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+.cash small{font:600 14px var(--body);color:var(--muted)}
+.bar{height:12px;border-radius:999px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--lime);transition:width .8s ease}
+.lost{color:var(--bad);font-weight:700;font-variant-numeric:tabular-nums}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inputs label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.inputs input{font:600 15px var(--body);padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--chat-bg);color:var(--ink);min-width:0;width:100%;font-variant-numeric:tabular-nums}
+.note{font-size:12px;color:var(--muted)}
+.clients{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.clients li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;border:1px solid var(--line)}
+.clients li.now{border-color:var(--violet);background:var(--chat-bg)}
+.av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:700 12px var(--display);background:var(--violet);color:#fff}
+.pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.pill.wait{background:var(--line);color:var(--muted)}
+.pill.ok{background:var(--lime);color:#17152B}
+.pill.bad{background:var(--bad);color:#fff}
+/* чат */
+.chat{display:grid;grid-template-rows:auto minmax(0,1fr) auto;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);background:var(--chat-bg);min-height:560px}
+.chat-head{display:flex;gap:12px;align-items:center;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+.chat-head .av{width:40px;height:40px;font-size:15px}
+.chat-head b{display:block;font-size:15px}
+.chat-head span{font-size:12px;color:var(--muted)}
+.msgs{padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;max-height:520px}
+.m{max-width:78%;padding:9px 13px;border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.m.them{background:var(--bubble-them);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+.m.me{background:var(--bubble-me);align-self:flex-end;border-bottom-right-radius:4px}
+.m.sys{align-self:center;background:transparent;color:var(--muted);font-size:12px;text-align:center;max-width:90%}
+.typing{color:var(--muted);font-size:13px;font-style:italic}
+.compose{display:flex;gap:10px;padding:12px;background:var(--card);border-top:1px solid var(--line)}
+.compose textarea{flex:1;min-width:0;resize:none;font:400 15px/1.4 var(--body);padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:var(--chat-bg);color:var(--ink);height:46px;max-height:140px}
+/* разбор */
+.verdict{display:grid;gap:12px}
+.verdict .big{font:600 20px/1.3 var(--display)}
+.verdict ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.better{background:var(--chat-bg);border-left:4px solid var(--lime);padding:12px 14px;border-radius:0 12px 12px 0;white-space:pre-wrap}
+.steps{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.steps li{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:8px;background:var(--chat-bg)}
+.steps .q{font-size:13px;color:var(--muted)}
+.steps .a{white-space:pre-wrap}
+.steps .mark{font:600 12px/1 var(--body);letter-spacing:.04em;text-transform:uppercase}
+.steps .mark.ok{color:var(--ok)} .steps .mark.bad{color:var(--bad)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.final{display:grid;gap:16px}
+.final .cash{font-size:clamp(34px,5vw,56px)}
+.warn{background:var(--card);border:1px dashed var(--bad);border-radius:var(--r);padding:16px}
+.team{display:grid;gap:12px}
+.team input{flex:1;min-width:220px;font:500 15px var(--body);padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--chat-bg);color:var(--ink)}
+body.tg{padding-block:12px 32px}
+body.tg header .lead{font-size:14px}
+.inputs input[readonly]{opacity:.7}
+.clip{background:transparent;color:var(--ink);border:1px solid var(--line);padding:0;width:46px;height:46px;font-size:20px;flex:none}
+.clip:hover{background:var(--chat-bg);color:var(--ink)}
+.attach{padding:12px;background:var(--card);border-top:1px solid var(--line);display:grid;gap:8px}
+.files{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.files button{background:var(--chat-bg);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:left;font:500 13px/1.35 var(--body)}
+.files button:hover{border-color:var(--violet);background:var(--chat-bg);color:var(--ink)}
+.m.file{background:var(--bubble-me);align-self:flex-end;border-bottom-right-radius:4px;display:grid;gap:2px}
+.m.file b{font-size:13px}
+.m.file span{font-size:13px;color:var(--muted)}
+.ref{margin-top:16px}
+.ref summary{cursor:pointer}
+.ref table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.ref th,.ref td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.ref th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ref .tbl{overflow-x:auto;margin-top:10px}
+.ref ul{margin:10px 0 0;padding-left:18px;display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="label">Тренажер-диагностика · недвижимость · Алматы</p>
+    <h1>Сколько ваш отдел теряет в переписке</h1>
+    <p class="lead">Пять клиентов застройщика пишут в мессенджер. Вы отвечаете так, как отвечаете в работе. Каждый слитый клиент забирает деньги из кассы, а в конце – разбор каждой переписки в стиле Анастасии Гавриш. </p>
+  </header>
+
+  <div id="err" class="warn" hidden></div>
+  <div id="teamBox" class="card team" hidden>
+    <p class="label">Проверка отдела продаж</p>
+    <h2 id="teamTitle"></h2>
+    <p>Вы – менеджер застройщика. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.</p>
+    <form id="aliasForm" class="row"><input id="alias" maxlength="40" placeholder="Как подписать вас в отчете – имя или псевдоним" required><button>Начать проверку</button></form>
+  </div>
+
+  <div class="mcash" id="mcash" aria-hidden="true"><span>Касса <b id="mcashV">–</b></span><span class="lost" id="mcashL"></span></div>
+  <div class="grid">
+    <aside class="card till" aria-label="Касса отдела">
+      <div>
+        <p class="label">Касса месяца</p>
+        <div class="cash" id="cash">–</div>
+        <p class="note" id="cashNote"></p>
+      </div>
+      <div class="bar" aria-hidden="true"><i id="bar" style="width:100%"></i></div>
+      <div>Потеряно: <span class="lost" id="lost">0 ₸</span></div>
+      <div class="inputs">
+        <label for="budget">Реклама, ₸ в мес.<input id="budget" inputmode="numeric" value="3 000 000"></label>
+        <label for="cpl">Стоимость лида, ₸<input id="cpl" inputmode="numeric" value="6 000"></label>
+        <label for="check">Средняя квартира, ₸<input id="check" inputmode="numeric" value="45 000 000"></label>
+        <label for="conv">Норма лид → сделка, %<input id="conv" inputmode="decimal" value="2"></label>
+      </div>
+      <p class="note">Цифры – пример, подставьте свои. Каждый клиент в игре – пятая часть вашего потока заявок. Если менеджер сливает его, касса теряет пятую часть.</p>
+      <ul class="clients" id="clients"></ul>
+    </aside>
+
+    <section>
+      <div class="chat" id="chat">
+        <div class="chat-head"><div class="av" id="hAv">?</div><div><b id="hName">Нажмите «Начать»</b><span id="hSub">клиент напишет первым</span></div></div>
+        <div class="msgs" id="msgs" aria-live="polite">
+          <div class="m sys">Задача менеджера в переписке – не продать квартиру за 10 минут, а довести клиента до встречи: онлайн или в офисе, где подбирают квартиру по шахматке и считают оплату.</div>
+        </div>
+        <div class="attach" id="attachPanel" hidden>
+          <p class="label">Что отправить клиенту</p>
+          <div class="files" id="files"></div>
+        </div>
+        <form class="compose" id="compose">
+          <button type="button" id="clip" class="clip" title="Прикрепить файл" aria-label="Прикрепить файл" disabled>📎</button>
+          <label for="txt" class="label" style="position:absolute;left:-9999px">Ваш ответ клиенту</label>
+          <textarea id="txt" placeholder="Ваш ответ клиенту…" disabled></textarea>
+          <button id="send" disabled>Отправить</button>
+        </form>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="start">Начать</button>
+        <button id="finishClient" class="ghost" hidden>Клиент ушел – закончить переписку</button>
+        <button id="finishGame" class="ghost" hidden>Завершить игру и получить итог</button>
+        <span class="note" id="turns"></span>
+      </div>
+      <div id="verdictBox" class="card verdict" style="margin-top:16px" hidden></div>
+      <div id="finalBox" class="card final" style="margin-top:16px" hidden></div>
+      <details class="card ref" id="ref" open>
+        <summary><b>Шпаргалка менеджера</b> – что у вас есть в продаже</summary>
+        <div id="refBody"></div>
+      </details>
+    </section>
+  </div>
+</div>
+
+<script>
+const CLIENTS = [
+  {name:"Динара", short:"Д", sub:"ищет квартиру ближе к центру", first:"Здравствуйте, интересует ЖК ближе к центру. Какие есть квартиры до 60 квадратов?"},
+  {name:"Арман", short:"А", sub:"инвестор, берет под аренду", first:"Добрый день. Какие есть однушки под сдачу в аренду? Что по рассрочке?"},
+  {name:"Айгерим", short:"Ай", sub:"молодая семья, ипотека", first:"Здравствуйте! Мы с мужем хотим купить первую квартиру в ипотеку, что можете предложить?"},
+  {name:"Сергей", short:"С", sub:"переезжает из Москвы", first:"Здравствуйте, я из Москвы, планирую переезд в Алматы. Можно у вас купить квартиру удаленно?"},
+  {name:"Мадина", short:"М", sub:"сравнивает с соседним ЖК", first:"Скиньте цены на двушки в вашем ЖК"}
+];
+const PROJECT = {
+  name: "ЖК «Тау Сити»",
+  about: "Вымышленный жилой комплекс для тренажера. Алмалинский район, рядом улица Ленина и центральный стадион, 10 минут до Арбата. Бизнес-класс, 12 этажей, закрытый двор без машин, школа и садик в 5 минутах пешком.",
+  queues: "Очередь 1 – сдача в 1 квартале 2027. Очередь 2 – сдача в 3 квартале 2027. Застройщик сдал 6 проектов без задержек.",
+  price: "Квадратный метр от 850 000 до 980 000 ₸ – зависит от этажа и вида. Видовые квартиры на горы с 4 этажа.",
+  pay: "100% оплата – скидка 4%. Рассрочка 0% на 12 месяцев при взносе от 30%. Ипотека через банк-партнер, первоначальный взнос от 20%, расчет платежа делает менеджер на встрече. Сделка удаленно возможна – договор подписывается по ЭЦП или через представителя, оплата из-за рубежа банковским переводом.",
+  meet: "Онлайн-показ в Zoom 30–40 минут – шахматка, планировки, вид с этажа, расчет оплаты. Офис продаж на объекте, ежедневно 10:00–20:00, по выходным тоже.",
+  lots: [
+    {t:"1-комн.", m:"38 м²", f:"3 этаж, во двор", q:"очередь 1", p:"32,9 млн ₸"},
+    {t:"1-комн.", m:"42 м²", f:"7 этаж, на горы", q:"очередь 1", p:"39,8 млн ₸"},
+    {t:"2-комн.", m:"52 м²", f:"5 этаж, во двор", q:"очередь 2", p:"46,8 млн ₸"},
+    {t:"2-комн.", m:"58 м²", f:"4 этаж, на горы", q:"очередь 2", p:"52,2 млн ₸"},
+    {t:"3-комн.", m:"92 м²", f:"9 этаж, на горы", q:"очередь 1", p:"84,6 млн ₸"}
+  ]
+};
+
+const FILES = [
+  ...PROJECT.lots.map(l=>({title:`Планировка ${l.t} ${l.m}`, desc:`${l.f}, ${l.q}, ${l.p}`})),
+  {title:"Презентация ЖК «Тау Сити» (PDF)", desc:"локация, инфраструктура, очереди, отделка"},
+  {title:"Шахматка свободных квартир", desc:"свободные квартиры по этажам, цены"},
+  {title:"Условия оплаты (PDF)", desc:"100% со скидкой 4%, рассрочка 0% на 12 мес., ипотека от 20%"},
+  {title:"Видео вида с 4 и 9 этажа", desc:"вид на горы, 40 секунд"},
+  {title:"Ссылка на сайт застройщика", desc:"taucity.kz – каталог квартир"}
+];
+const MAX_TURNS = 8;
+const CONTACT = "gavrish_anastasiya";
+
+const $ = id => document.getElementById(id);
+const TG = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData ? window.Telegram.WebApp : null;
+const params = new URLSearchParams(location.search);
+const TEAM = params.get('team') || (TG && TG.initDataUnsafe && (TG.initDataUnsafe.start_param||'').replace(/^t_/,'')) || '';
+let state = null, busy = false, sid = null, teamInfo = null, alias = '';
+
+if (TG){
+  document.body.classList.add('tg');
+  try { TG.ready(); TG.expand(); document.documentElement.dataset.theme = TG.colorScheme === 'dark' ? 'dark' : 'light'; } catch(e){}
+}
+
+async function api(path, body){
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  let data = null; try { data = await r.json(); } catch(e){}
+  if (!r.ok){ const err = new Error((data && data.error) || ('http '+r.status)); err.code = data && data.error; err.data = data; throw err; }
+  return data;
+}
+function showErr(html){ $('err').innerHTML = html; $('err').hidden = !html; }
+
+function num(v){ return Number(String(v).replace(/[^\d.,]/g,'').replace(',','.')) || 0; }
+function money(n){ return Math.round(n).toLocaleString('ru-RU').replace(/ /g,' ') + ' ₸'; }
+function short(n){ if (n>=1e9) return (n/1e9).toFixed(1).replace('.',',')+' млрд ₸'; if (n>=1e6) return Math.round(n/1e6)+' млн ₸'; return money(n); }
+function nums(){ return {budget:num($('budget').value), cpl:num($('cpl').value), check:num($('check').value), conv:num($('conv').value)}; }
+function setNums(n){
+  $('budget').value = money(n.budget).replace(' ₸',''); $('cpl').value = money(n.cpl).replace(' ₸','');
+  $('check').value = money(n.check).replace(' ₸',''); $('conv').value = String(n.conv).replace('.',',');
+}
+function till(){
+  const n = nums(); const leads = n.budget/Math.max(1,n.cpl); const deals = leads*n.conv/100;
+  return {leads, deals, total: deals*n.check};
+}
+function renderTill(){
+  const t = till(); const share = t.total/CLIENTS.length;
+  const lostN = state ? state.results.filter(r=>r && r.lost).length : 0;
+  const left = t.total - lostN*share;
+  $('cash').innerHTML = short(left) + ' <small>из ' + short(t.total) + '</small>';
+  $('cashNote').textContent = Math.round(t.leads) + ' лидов в месяц, при норме ' + t.deals.toFixed(1).replace('.',',') + ' сделок';
+  $('lost').textContent = short(lostN*share);
+  $('mcashV').textContent = short(left); $('mcashL').textContent = lostN ? '−' + short(lostN*share) : 'из ' + short(t.total);
+  $('bar').style.width = (t.total ? Math.max(0,left/t.total*100) : 100) + '%';
+  $('clients').innerHTML = CLIENTS.map((c,i)=>{
+    const r = state && state.results[i];
+    const pill = !r ? '<span class="pill wait">ждет</span>' : r.lost ? '<span class="pill bad">слит</span>' : '<span class="pill ok">встреча</span>';
+    const now = state && state.i===i && !r ? ' class="now"' : '';
+    return `<li${now}><span class="av">${c.short}</span><span><b>${c.name}</b><br><span class="note">${c.sub}</span></span>${pill}</li>`;
+  }).join('');
+}
+['budget','cpl','check','conv'].forEach(id=>$(id).addEventListener('input',renderTill));
+
+function bubble(cls, text){ const d=document.createElement('div'); d.className='m '+cls; d.textContent=text; $('msgs').append(d); $('msgs').scrollTop=$('msgs').scrollHeight; return d; }
+
+function openClient(i){
+  const c = CLIENTS[i];
+  state.i = i; state.log = [{who:'client', text:c.first}]; state.turns = 0; state.closing = false;
+  $('hAv').textContent = c.short; $('hName').textContent = c.name; $('hSub').textContent = c.sub;
+  $('msgs').innerHTML = ''; bubble('sys', `Клиент ${i+1} из ${CLIENTS.length}. Заявка пришла с рекламы в Instagram.`);
+  bubble('them', c.first);
+  $('verdictBox').hidden = true; $('finishClient').hidden = false;
+  setInput(true); turns(); renderTill();
+  $('chat').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function setInput(on){ $('txt').disabled=!on; $('send').disabled=!on; $('clip').disabled=!on; if(!on) $('attachPanel').hidden=true; if(on && !TG) $('txt').focus(); }
+function turns(){ $('turns').textContent = state && state.i>=0 ? `Клиент ${state.i+1} из ${CLIENTS.length} · ответов ${state.turns} из ${MAX_TURNS}` : ''; }
+function doneCount(){ return state ? state.results.filter(Boolean).length : 0; }
+
+function renderRef(){
+  $('refBody').innerHTML = `<p style="margin:10px 0 0">${esc(PROJECT.about)}</p>
+    <div class="tbl"><table><thead><tr><th>Квартира</th><th>Площадь</th><th>Этаж и вид</th><th>Сдача</th><th>Цена</th></tr></thead><tbody>
+    ${PROJECT.lots.map(l=>`<tr><td>${l.t}</td><td>${l.m}</td><td>${l.f}</td><td>${l.q}</td><td>${l.p}</td></tr>`).join('')}</tbody></table></div>
+    <ul><li><b>Сроки.</b> ${esc(PROJECT.queues)}</li><li><b>Цена.</b> ${esc(PROJECT.price)}</li><li><b>Оплата.</b> ${esc(PROJECT.pay)}</li><li><b>Встреча.</b> ${esc(PROJECT.meet)}</li></ul>
+    <p class="note" style="margin-top:8px">Файлы отправляются кнопкой 📎 в чате. Клиент видит их так, как будто вы прислали картинку или PDF.</p>`;
+  $('files').innerHTML = FILES.map((f,k)=>`<button type="button" data-k="${k}"><b>${esc(f.title)}</b><br><span class="note">${esc(f.desc)}</span></button>`).join('');
+}
+$('clip').onclick = () => { $('attachPanel').hidden = !$('attachPanel').hidden; };
+$('files').addEventListener('click', e => {
+  const b = e.target.closest('button[data-k]'); if(!b || busy || !state) return;
+  const f = FILES[+b.dataset.k];
+  $('attachPanel').hidden = true;
+  const d = document.createElement('div'); d.className='m file';
+  d.innerHTML = `<b>📎 ${esc(f.title)}</b><span>${esc(f.desc)}</span>`; $('msgs').append(d); $('msgs').scrollTop=$('msgs').scrollHeight;
+  state.log.push({who:'manager', text:`[Файл: ${f.title} – ${f.desc}]`});
+});
+
+async function withRetry(fn){
+  try { return await fn(); } catch(e1){ if (e1 && (e1.code==='session' || e1.code==='limit')) throw e1; await new Promise(r=>setTimeout(r,1500)); return await fn(); }
+}
+
+async function send(e){
+  e.preventDefault();
+  if (busy || !state || state.closing) return;
+  const text = $('txt').value.trim();
+  const fileWaiting = state.log.length && state.log[state.log.length-1].who==='manager';
+  if(!text && !fileWaiting) return;
+  if(text){ $('txt').value=''; bubble('me', text); state.log.push({who:'manager', text}); }
+  state.turns++; turns();
+  busy = true; setInput(false);
+  const typing = bubble('them typing', `${CLIENTS[state.i].name} печатает…`);
+  try{
+    const r = await withRetry(() => api('/api/client', {sid, i:state.i, log:state.log, turns:state.turns}));
+    typing.remove();
+    const reply = (r && r.reply) ? String(r.reply) : '…';
+    bubble('them', reply); state.log.push({who:'client', text:reply});
+    const out = String((r && r.outcome) || '').toLowerCase();
+    busy = false;
+    if (out.includes('meet') || out.includes('lost') || state.turns>=MAX_TURNS){ await closeClient(out.includes('meet') ? 'meeting' : 'lost'); }
+    else setInput(true);
+  }catch(err){
+    typing.remove();
+    if (err && err.code==='session') bubble('sys','Сессия устарела – обновите страницу, чтобы начать заново.');
+    else if (err && err.code==='limit') bubble('sys','Лимит ответов в этой игре исчерпан.');
+    else { bubble('sys','Клиент не ответил – сбой связи. Нажмите «Отправить» еще раз.'); state.turns--; turns(); setInput(true); }
+  } finally { busy=false; }
+}
+
+async function closeClient(outcome){
+  if (state.closing) return; state.closing = true;
+  state.outcome = outcome; setInput(false); $('finishClient').hidden = true;
+  bubble('sys', outcome==='meeting' ? 'Встреча назначена. Клиент остается в кассе.' : 'Клиент ушел. Касса теряет пятую часть.');
+  const share = till().total/CLIENTS.length;
+  state.results[state.i] = {lost: outcome!=='meeting'}; renderTill(); $('finishGame').hidden = false;
+  if (outcome!=='meeting') bubble('sys', `−${short(share)} из кассы`);
+  if (TG) try { TG.HapticFeedback.notificationOccurred(outcome==='meeting'?'success':'error'); } catch(e){}
+  $('verdictBox').hidden=false;
+  await renderReview(outcome, share);
+}
+
+async function renderReview(outcome, share){
+  const box = $('verdictBox'); const i = state.i; const c = CLIENTS[i]; const logCopy = state.log.slice();
+  const head = outcome==='meeting' ? `<span class="pill ok">встреча</span>` : `<span class="pill bad">слит · −${short(share)}</span>`;
+  box.innerHTML = `<div class="row"><p class="label" style="margin:0">Разбор · ${c.name}</p>${head}</div>
+    <div id="vMain"><p class="typing">Анастасия читает переписку… обычно это занимает до минуты</p></div>
+    <div id="vSteps"><p class="label">Разбор по шагам</p><p class="typing">Готовлю подсказки к каждому вашему ответу…</p></div>
+    <div class="row" id="vNext"></div>`;
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+  const b = document.createElement('button');
+  const last = i >= CLIENTS.length-1;
+  b.textContent = last ? 'Итог по отделу' : `Следующий клиент – ${CLIENTS[i+1].name}`;
+  b.onclick = () => { last ? finale() : openClient(i+1); };
+  $('vNext').append(b);
+  try{
+    const r = await withRetry(() => api('/api/review', {sid, i, log:logCopy, turns:state.turns, outcome}));
+    const v = r.v; state.results[i].v = v;
+    $('vMain').innerHTML = v ? `${v.stage?`<p class="note">Дошли до этапа «${esc(v.stage)}»</p>`:''}
+      <p class="big">${esc(v.phrase||'')}</p>
+      <p>${esc(v.summary||'')}</p>
+      ${(v.good||[]).length?`<div><p class="label">Что получилось</p><ul>${v.good.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+      ${(v.errors||[]).length?`<div><p class="label">Где слили</p><ul>${v.errors.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+      ${v.hidden?`<p><b>Что не узнали о клиенте.</b> ${esc(v.hidden)}</p>`:''}` : '<p>Общий разбор не загрузился.</p>';
+    const st = r.steps;
+    $('vSteps').innerHTML = st && st.length ? `<p class="label">Разбор по шагам – как ответить, чтобы клиент не слился</p><ol class="steps">${st.map((x,k)=>`<li>
+      <span class="mark ${x.ok?'ok':'bad'}">Шаг ${k+1} · ${x.ok?'хорошо':'ошибка'}</span>
+      <span class="q">Клиент: «${esc(x.client)}»</span>
+      <span class="a"><b>Вы:</b> ${esc(x.manager)}</span>
+      ${x.comment?`<span>${esc(x.comment)}</span>`:''}
+      ${x.better?`<div class="better">${esc(x.better)}</div>`:''}</li>`).join('')}</ol>` : (st ? '<p class="note">Вы не успели ответить клиенту – разбирать по шагам нечего.</p>' : '<p>Разбор по шагам не загрузился.</p>');
+  }catch(err){
+    $('vMain').innerHTML = '<p>Разбор не загрузился – сбой связи.</p>'; $('vSteps').innerHTML = '';
+    const rt = document.createElement('button'); rt.className='ghost'; rt.textContent='Повторить разбор';
+    rt.onclick = () => renderReview(outcome, share); $('vNext').prepend(rt);
+  }
+}
+
+function finale(){
+  $('verdictBox').hidden = true;
+  const t = till();
+  const done = state.results.filter(Boolean);
+  const lost = done.filter(r=>r.lost).length;
+  const lostShare = done.length ? lost/done.length : 0;
+  const allErr = done.flatMap(r=>(r.v&&r.v.errors)||[]).slice(0,6);
+  const box = $('finalBox'); box.hidden=false;
+  setInput(false); $('finishClient').hidden=true; $('finishGame').hidden=true;
+  api('/api/finish', {sid}).catch(()=>{});
+  const teamNote = teamInfo ? `<p><b>Результат и разборы отправлены руководителю.</b> Спасибо, что прошли проверку!</p>` : '';
+  box.innerHTML = `<p class="label">${teamInfo ? 'Ваш итог' : 'Итог по отделу'}</p>
+    <div class="cash" style="color:${lost?'var(--bad)':'var(--ok)'}">−${short(lostShare*t.total)} в месяц</div>
+    <p>Пройдено клиентов: ${done.length} из ${CLIENTS.length}, до встречи дошли ${done.length-lost}. Если менеджер так отвечает всем, при этих цифрах отдел недополучает около <b>${short(lostShare*t.total)}</b> в месяц и <b>${short(lostShare*t.total*12)}</b> в год.</p>
+    ${teamNote}
+    ${allErr.length?`<div><p class="label">Ошибки, которые повторялись</p><ul>${allErr.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+    <p class="big" style="font:600 18px/1.35 var(--display)">Реклама может приводить 100% целевых клиентов, но если менеджер сливает их в переписке, чем больше вы тратите на трафик, тем больше теряете.</p>
+    <p>Хотите разобрать настоящие переписки вашего отдела? Напишите Анастасии в Telegram – <b>@${CONTACT}</b>.</p>
+    <div class="row">${teamInfo ? '' : '<button id="again" class="ghost">Пройти еще раз</button>'}<button id="write">Написать Анастасии</button></div>`;
+  if ($('again')) $('again').onclick = () => { box.hidden=true; startGame(); };
+  $('write').onclick = () => { const u = `https://t.me/${CONTACT}`; if (TG) TG.openTelegramLink(u); else window.open(u, '_blank', 'noopener'); };
+  $('hName').textContent='Игра окончена'; $('hSub').textContent='смотрите итог ниже'; $('hAv').textContent='✓';
+  state.i = -1; renderTill();
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+
+async function startGame(){
+  if (busy) return;
+  showErr(''); $('start').disabled = true;
+  try{
+    const r = await api('/api/session', {initData: TG ? TG.initData : '', team: TEAM, alias, nums: teamInfo ? null : nums()});
+    sid = r.sid; setNums(r.nums);
+  }catch(err){
+    $('start').disabled = false;
+    if (err.code==='daily') showErr(`На сегодня лимит – ${err.data.limit} игры. Возвращайтесь завтра или напишите Анастасии – <b>@${CONTACT}</b>.`);
+    else if (err.code==='team') showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.');
+    else showErr('Не получилось начать игру – сбой связи. Попробуйте еще раз через минуту.');
+    return;
+  }
+  $('start').disabled = false;
+  state = {i:0, results:Array(CLIENTS.length).fill(null), log:[], turns:0};
+  $('start').textContent = 'Начать заново'; $('finalBox').hidden=true; $('finishGame').hidden=true;
+  if (teamInfo){ $('start').hidden = true; ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true); }
+  openClient(0);
+}
+$('finishGame').onclick = () => { if(state && !busy && doneCount()) finale(); };
+$('compose').addEventListener('submit', send);
+$('txt').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey && !TG){ e.preventDefault(); $('compose').requestSubmit(); }});
+$('start').onclick = () => { if (state && state.i>=0 && !confirm('Начать игру заново? Текущая переписка пропадет.')) return; startGame(); };
+$('finishClient').onclick = () => { if(state && !busy) closeClient('lost'); };
+
+renderRef(); renderTill();
+if (TEAM){
+  fetch('/api/team?team=' + encodeURIComponent(TEAM)).then(r=>r.json()).then(t=>{
+    if (t.error){ showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.'); return; }
+    teamInfo = t; setNums(t.nums); renderTill();
+    $('teamTitle').textContent = t.title; $('teamBox').hidden = false; $('start').hidden = true;
+    ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true);
+    const nm = TG && TG.initDataUnsafe && TG.initDataUnsafe.user && TG.initDataUnsafe.user.first_name; if (nm) $('alias').value = nm;
+  }).catch(()=>showErr('Не получилось открыть проверку – сбой связи.'));
+  $('aliasForm').addEventListener('submit', e=>{ e.preventDefault(); alias = $('alias').value.trim(); if(!alias) return; $('teamBox').hidden = true; startGame(); });
+}
+</script>
+</body>
+</html>

@@ -47,6 +47,44 @@ if [[ ! -f "$ENVF" ]] || [[ "${1:-}" == "--reset" ]]; then
 fi
 chown root:kassabot "$ENVF"; chmod 640 "$ENVF"
 
+# --- Веб-версия игры (Telegram Mini App и сайт): nginx + HTTPS ---
+WEB_DOMAIN=${WEB_DOMAIN:-game.a-gavrish.com}
+apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null
+cat > /etc/nginx/sites-available/kassa-web <<NGINX
+server {
+    listen 80;
+    server_name $WEB_DOMAIN;
+    client_max_body_size 256k;
+    location / {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_read_timeout 180s;
+    }
+}
+NGINX
+ln -sf /etc/nginx/sites-available/kassa-web /etc/nginx/sites-enabled/kassa-web
+rm -f /etc/nginx/sites-enabled/default
+nginx -t -q && systemctl reload nginx
+cat > /usr/local/bin/kassa-web-cert <<CERT
+#!/usr/bin/env bash
+# Выпускает HTTPS для $WEB_DOMAIN, как только домен указывает на этот сервер, и включает кнопку «Играть» в боте
+set -uo pipefail
+if [[ ! -d /etc/letsencrypt/live/$WEB_DOMAIN ]]; then
+  MY=\$(curl -s4 -m 10 https://api.ipify.org || true)
+  DNS=\$(getent ahostsv4 $WEB_DOMAIN | awk 'NR==1{print \$1}')
+  if [[ -z "\$MY" || "\$MY" != "\$DNS" ]]; then echo "Домен $WEB_DOMAIN пока не указывает на этот сервер (\${DNS:-нет записи} вместо \$MY)"; exit 0; fi
+  certbot --nginx -d $WEB_DOMAIN --non-interactive --agree-tos --register-unsafely-without-email --redirect -q || { echo "Не удалось выпустить сертификат – проверьте, что открыты порты 80 и 443"; exit 0; }
+  echo "HTTPS для $WEB_DOMAIN выпущен"
+fi
+if ! grep -q '^WEBAPP_URL=' $ENVF; then
+  echo "WEBAPP_URL=https://$WEB_DOMAIN" >> $ENVF
+  systemctl restart kassa-bot
+  echo "Кнопка «Играть» в боте включена – игра открывается по адресу https://$WEB_DOMAIN"
+fi
+CERT
+chmod 755 /usr/local/bin/kassa-web-cert
+
 python3 -m venv "$APP-venv"
 "$APP-venv/bin/pip" install -q --upgrade pip
 "$APP-venv/bin/pip" install -q -r "$APP/bot/requirements.txt"
@@ -79,6 +117,7 @@ cd $APP
 OLD=\$(git rev-parse HEAD)
 git fetch -q origin main
 NEW=\$(git rev-parse origin/main)
+/usr/local/bin/kassa-web-cert >/dev/null 2>&1 || true
 [[ "\$OLD" == "\$NEW" ]] && exit 0
 git reset -q --hard origin/main
 if git diff --name-only "\$OLD" "\$NEW" | grep -q '^bot/'; then
@@ -109,6 +148,8 @@ systemctl daemon-reload
 systemctl enable -q --now kassa-bot kassa-bot-update.timer
 systemctl restart kassa-bot
 sleep 4
+/usr/local/bin/kassa-web-cert || true
+sleep 3
 if systemctl is-active -q kassa-bot; then
   NAME=$(curl -fsS -m 15 "https://api.telegram.org/bot$(grep '^TG_BOT_TOKEN=' "$ENVF" | cut -d= -f2)/getMe" | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["username"])' || true)
   echo "Готово. Бот запущен – откройте https://t.me/$NAME и нажмите «Старт»."
