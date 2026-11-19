@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 import owner as own
-from game_data import CLIENTS, DEFAULT_NUMBERS, MAX_TURNS
+from game_data import NICHES, niche
 
 log = logging.getLogger("kassa.web")
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -68,13 +68,23 @@ def session(req, data):
 
 
 def game_of(s, data):
+    n = niche(s["niche"])
     i = int(data.get("i", -1))
-    if not 0 <= i < len(CLIENTS):
+    if not 0 <= i < len(n["clients"]):
         raise web.HTTPBadRequest(text=json.dumps({"error": "client"}), content_type="application/json")
-    g = SimpleNamespace(i=i, log=clean_log(data.get("log")), turns=min(MAX_TURNS, max(1, int(data.get("turns", 1)))), nums=s["nums"])
+    g = SimpleNamespace(i=i, log=clean_log(data.get("log")), turns=min(n["max_turns"], max(1, int(data.get("turns", 1)))), nums=s["nums"],
+                        niche=n["id"])
     if not g.log or g.log[0]["who"] != "client":
-        g.log.insert(0, dict(who="client", text=CLIENTS[i]["first"]))
+        g.log.insert(0, dict(who="client", text=n["clients"][i]["first"]))
     return g
+
+
+def public_niche(n):
+    """Что видит страница: без скрытых деталей клиентов и без правил разбора."""
+    return dict(id=n["id"], title=n["title"], project_name=n["project_name"], max_turns=n["max_turns"], nums=n["nums"], page=n["page"],
+                win=n["win"], win_sys=n["win_sys"], wins=n["wins"], reach=n["reach"], files=n["files"],
+                clients=[dict(name=c["name"], short=c["name"][:2] if c["name"].startswith("Ай") else c["name"][0], sub=c["sub"], first=c["first"])
+                         for c in n["clients"]])
 
 
 def gc():
@@ -99,7 +109,9 @@ async def api_session(req):
         if len(STARTS[who]) >= K.GAMES_PER_DAY and not (user and (user.get("username") or "").lower() in K.ADMINS):
             return web.json_response({"error": "daily", "limit": K.GAMES_PER_DAY}, status=429)
         STARTS[who].append(time.time())
-    nums = own.team_nums(t) if t else DEFAULT_NUMBERS
+    nid = own.team_niche(t)["id"] if t else (data.get("niche") if data.get("niche") in NICHES else "realestate")
+    nc = niche(nid)
+    nums = own.team_nums(t) if t else nc["nums"]
     if not t and isinstance(data.get("nums"), dict):
         try:
             n = {k: float(data["nums"][k]) for k in ("budget", "cpl", "check", "conv")}
@@ -109,19 +121,24 @@ async def api_session(req):
             pass
     sid = secrets.token_urlsafe(18)
     s = dict(created=time.time(), who=who, user=user, team=t["id"] if t else None, pid=None, alias="", nums=dict(nums), calls=0,
-             results=[None] * len(CLIENTS))
+             niche=nid, results=[None] * len(nc["clients"]))
     if t:
         alias = " ".join(str(data.get("alias") or "").split())[:40] or "Менеджер"
         uid = user["id"] if user else -abs(hash(who)) % (10 ** 12)
         s["alias"], s["pid"] = alias, own.start_player(t["id"], uid, alias)
     SESSIONS[sid] = s
-    return web.json_response({"sid": sid, "nums": s["nums"], "team": {"title": t["title"]} if t else None,
+    return web.json_response({"sid": sid, "nums": s["nums"], "niche": nid, "team": {"title": t["title"]} if t else None,
                               "name": (user or {}).get("first_name", "")})
 
 
 async def api_team(req):
     t = own.team(req.query.get("team", ""))
-    return web.json_response({"title": t["title"], "nums": own.team_nums(t)} if t else {"error": "team"}, status=200 if t else 404)
+    return web.json_response({"title": t["title"], "nums": own.team_nums(t), "niche": own.team_niche(t)["id"]} if t else {"error": "team"},
+                             status=200 if t else 404)
+
+
+async def api_niche(req):
+    return web.json_response(public_niche(niche(req.query.get("n"))), headers={"Cache-Control": "no-cache"})
 
 
 async def api_client(req):
@@ -163,7 +180,7 @@ async def api_review(req):
         if not s.get("start_sent"):
             s["start_sent"] = True
             await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> начал проверку, отдел «{{team}}». Первый клиент – "
-                                  f"{'встреча назначена' if outcome == 'meeting' else 'слит'}. Итог пришлю, когда закончит.")
+                                  f"{niche(s['niche'])['win_done'] if outcome == 'meeting' else 'слит'}. Итог пришлю, когда закончит.")
     return web.json_response({"v": v, "steps": merged})
 
 
@@ -195,12 +212,13 @@ async def api_finish(req):
     if not s or s.get("finished"):
         return web.json_response({"ok": True})
     done, lost, loss = score(s)
+    n = niche(s["niche"])
     if data.get("partial"):
         # менеджер закрыл игру, не дойдя до конца
         if s["team"] and done and not s.get("partial_sent"):
             s["partial_sent"] = True
             await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> закрыл или свернул игру, не дойдя до конца, отдел «{{team}}».\n"
-                                  f"Пока пройдено клиентов – {len(done)} из {len(CLIENTS)}, встречи – {len(done) - lost}, потери – около <b>{K.short(loss)}</b> в месяц. "
+                                  f"Пока пройдено клиентов – {len(done)} из {len(n['clients'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss)}</b> в месяц. "
                                   "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
         return web.json_response({"ok": True})
     s["finished"] = True
@@ -208,7 +226,7 @@ async def api_finish(req):
     if s["team"] and s["pid"]:
         own.finish_player(s["pid"])
         await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> – проверка пройдена, отдел «{{team}}».\n"
-                              f"Встречи – {len(done) - lost} из {len(done)}, потери – около <b>{K.short(loss)}</b> в месяц.")
+                              f"{n['wins'].capitalize()} – {len(done) - lost} из {len(done)}, потери – около <b>{K.short(loss)}</b> в месяц.")
     return web.json_response({"ok": True})
 
 
@@ -224,6 +242,7 @@ async def start(bot, kmod):
     app = web.Application(client_max_size=256 * 1024)
     app.router.add_get("/", index)
     app.router.add_get("/api/team", api_team)
+    app.router.add_get("/api/niche", api_niche)
     app.router.add_post("/api/session", api_session)
     app.router.add_post("/api/client", api_client)
     app.router.add_post("/api/review", api_review)

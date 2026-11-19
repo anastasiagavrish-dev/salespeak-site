@@ -20,7 +20,7 @@ from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButto
                            MenuButtonWebApp, ReplyKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo)
 
 import owner as own
-from game_data import CLIENTS, DEFAULT_NUMBERS, FILES, MAX_TURNS, PROJECT, PROJECT_TEXT, RULES, STAGES
+from game_data import CLIENTS, DEFAULT_NUMBERS, FILES, MAX_TURNS, NICHES, PROJECT, niche
 
 TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 # Любая нейросеть с OpenAI-совместимым API. По умолчанию DeepSeek.
@@ -173,25 +173,32 @@ def manager_turns(lg):
 
 
 # ---------------- промпты ----------------
+def nz(g):
+    """Данные ниши, в которой идет игра."""
+    return niche(getattr(g, "niche", None))
+
+
 def client_prompt(g):
-    c = CLIENTS[g.i]
-    return f"""Ты играешь клиента в тренажере продаж. Тебе пишет менеджер застройщика в WhatsApp. Ты не помощник и не продавец – ты обычный человек, который ищет квартиру в Алматы.
+    n = nz(g)
+    c = n["clients"][g.i]
+    mt = n["max_turns"]
+    return f"""Ты играешь клиента в тренажере продаж. {n['client_ctx']}
 
 Кто ты (скрытые детали раскрывай только если менеджер прямо и уместно спросит):
 {c['brief']}
 
-Менеджер продает вот что (ты этого заранее не знаешь, узнаешь только из его сообщений): {PROJECT_TEXT}
-Менеджер может присылать файлы – в переписке они выглядят как [Файл: название – описание]. Считай, что ты получил картинку или PDF и посмотрел их. Планировка или карточка квартиры прямо в чате – это удобно. Ссылка на сайт вместо файла – неудобно.
+Менеджер продает вот что (ты этого заранее не знаешь, узнаешь только из его сообщений): {n['project_text']}
+Менеджер может присылать файлы – в переписке они выглядят как [Файл: название – описание]. Считай, что ты получил картинку, видео или PDF и посмотрел их. {n['files_note']}
 
 Как себя вести:
 - Отвечай как живой человек в мессенджере: коротко, 1–3 предложения, на русском, без эмодзи или с одним.
 - Не подсказывай менеджеру, что делать, и не облегчай ему работу.
-- Реагируй на ошибки, которые раздражают клиентов: «чем могу помочь» после конкретного запроса, ссылки на сайт вместо картинок в чате, простыни текста, «примерно», путаница в цифрах, вопросы-допросы без пояснения, неграмотность, давление. Раздражение показывай сдержанно, как реальный человек.
-- Если менеджер выявил твои потребности и предложил понятный следующий шаг, который тебе подходит (онлайн-встреча или визит с понятной пользой, в удобное время) – соглашайся. Это outcome "meeting".
+- Реагируй на ошибки, которые раздражают клиентов: {n['irritants']}. Раздражение показывай сдержанно, как реальный человек.
+- {n['win_rule']} Это outcome "meeting".
 - Если менеджер грубит, игнорирует твои вопросы, дважды не дает того, что ты просишь, или явно не ведет к следующему шагу – теряй интерес. Можешь вежливо закончить («спасибо, подумаю») – это outcome "lost".
 - Если ты прощаешься, пишешь «спасибо, подумаю», «посмотрю у других», «не актуально» или перестаешь интересоваться – это всегда outcome "lost".
 - Иначе продолжай диалог – outcome "continue".
-- Сейчас ответ номер {g.turns} менеджера из {MAX_TURNS}. Если это последний ответ и встреча не назначена – заверши разговор, outcome "lost".
+- Сейчас ответ номер {g.turns} менеджера из {mt}. Если это последний ответ и {n['win_done']} не случилось – заверши разговор, outcome "lost".
 
 Переписка до сих пор:
 {transcript(g.log)}
@@ -201,40 +208,71 @@ def client_prompt(g):
 
 STYLE = "Пиши живо, прямо и по-человечески, от первого лица, как в голосовых разборах. Без буквы «ё», тире короткое «–», без канцелярита, минимум двоеточий."
 
+# Как Анастасия звучит в голосовых разборах переписок (собрано из ее разборов спа, клиник, недвижимости и ИИ-ассистентов).
+VOICE = """Как звучит Анастасия в разборах:
+- Сразу итог одной фразой, без разгона: «Тут даже обсуждать нечего – это слитая переписка» или «В целом не криминально, но есть одна критическая ошибка, из-за которой клиенты уходят».
+- Смотрит глазами клиента и говорит от его лица: «мне не уточнили ничего абсолютно», «скинули прайс – разбирайтесь, мол, сами», «я читаю один раз, второй и думаю, что это описка».
+- Хвалит конкретно и по делу: «Тут молодцы – ответили через три минуты, а вечером клиент за час найдет того, кто отвечает».
+- Ошибку называет прямо, с цитатой менеджера, и объясняет, чем она стоит денег: «клиент молча ушел и вернулся к вам уже никогда».
+- Сразу дает, как надо, готовой фразой менеджера: не «Подскажите, что решили?», а «Давайте оформим, пришлю ссылку на оплату – получится сегодня?».
+- Эмоция короткая и честная: «Почему никто ничего не спрашивает? Вот это меня больше всего поражает».
+- Никаких «менеджеру следует», «рекомендуется», «необходимо отметить» – говорит с менеджером на «вы», как наставник."""
+
+VERDICT_EXAMPLE = """Пример разбора в ее голосе (другая ниша – спа, клиент слит):
+{"stage": "Контакт установлен",
+ "summary": "Ответили быстро, но дальше мне просто скинули три программы и ни о чем не спросили. На вопрос про акцию прислали голосовое без спроса, и я замолчала. На следующий день – «подскажите, что решили», а это не попытка сделки.",
+ "good": ["Ответили через три минуты в десять вечера – вечером клиент за час находит тех, кто отвечает"],
+ "errors": ["Ни одного вопроса – для кого программа, на какой день, что важно. Программы прислали со словами «вот что у нас есть», разбирайтесь сами", "Голосовое без разрешения, чтобы объяснить «акция на акцию не распространяется» – после него я перестала отвечать", "«Подскажите, что решили?» вместо утвердительного «Давайте запишу, есть окна завтра в 12:00 и в четверг в 18:00, как удобнее?»"],
+ "hidden": "Для кого программа – пара, подруги, мама с дочкой – так никто и не спросил",
+ "phrase": "Клиент пришел сам, а его отпустили – не спросили ни одного вопроса и не предложили дату."}"""
+
+STEPS_EXAMPLE = """Пример одного шага в ее голосе:
+{"ok": false,
+ "comment": "Вы прислали весь прайс и замолчали. Клиент открыл, увидел двадцать позиций и ушел думать – а думать ему не над чем, вы ничего о нем не знаете.",
+ "better": "Добрый вечер, Алина! Меня зовут Мадина 😊 Чтобы не грузить вас всем прайсом, подберу под вас – ответьте, пожалуйста, на три вопроса: 1. Для кого программа? 2. На какой день планируете? 3. Что важнее – расслабиться или восстановиться после нагрузки? Можно голосовым, как удобнее."}"""
+
 
 def verdict_prompt(g, outcome):
-    c = CLIENTS[g.i]
-    return f"""Ты – Анастасия Гавриш, эксперт по продажам. Ты разбираешь переписку менеджера застройщика с клиентом для собственника бизнеса. {STYLE} Честно называй ошибки, отмечай, что получилось хорошо.
+    n = nz(g)
+    c = n["clients"][g.i]
+    return f"""Ты – Анастасия Гавриш, эксперт по продажам. Ты разбираешь переписку ({n['role']} и клиент) для собственника бизнеса. {STYLE} Честно называй ошибки, отмечай, что получилось хорошо.
 
-{RULES}
+{VOICE}
+
+{n['rules']}
 
 Клиент: {c['name']}, {c['sub']}. Что о клиенте было скрыто: {c['brief']}
-Что было у менеджера в продаже: {PROJECT_TEXT}
-Сообщения вида [Файл: …] – файлы, которые менеджер отправил прямо в чат. Планировки и карточки в чате – плюс, ссылка на сайт – минус.
+Что было у менеджера в продаже: {n['project_text']}
+Сообщения вида [Файл: …] – файлы, которые менеджер отправил прямо в чат. Файлы в чате – плюс, ссылка на сайт вместо файла – минус.
 
-Итог переписки: {'клиент согласился на встречу' if outcome == 'meeting' else 'клиент слит'}.
+Итог переписки: {n['win_verdict'] if outcome == 'meeting' else 'клиент слит'}.
 
 Переписка:
 {transcript(g.log)}
 
-Верни строго JSON без markdown:
-{{"stage": одно из {json.dumps(STAGES, ensure_ascii=False)} – последний этап, который менеджер реально прошел,
+{VERDICT_EXAMPLE}
+
+Пиши именно про эту переписку и эту нишу, пример – только образец голоса и формата. Верни строго JSON без markdown:
+{{"stage": одно из {json.dumps(n['stages'], ensure_ascii=False)} – последний этап, который менеджер реально прошел,
  "summary": "2–3 предложения – что произошло и почему клиент {'согласился' if outcome == 'meeting' else 'ушел'}",
  "good": ["что менеджер сделал хорошо"] (0–3 пункта),
- "errors": ["конкретная ошибка с цитатой менеджера"] (1–4 пункта),
+ "errors": ["конкретная ошибка с цитатой менеджера"] (1–4 пункта; если клиент согласился, но менеджер нарушил правило, например продал без вопроса о здоровье, – это тоже ошибка),
  "hidden": "что важное о клиенте менеджер так и не узнал (одна фраза или пустая строка)",
  "phrase": "вывод одной фразой, который хочется переслать"}}"""
 
 
 def steps_prompt(g, t):
-    c = CLIENTS[g.i]
+    n = nz(g)
+    c = n["clients"][g.i]
     lines = "\n".join(f"{k + 1}. Клиент написал: «{x['client']}»\n   Менеджер ответил: «{x['manager']}»" for k, x in enumerate(t))
-    return f"""Ты – Анастасия Гавриш, эксперт по продажам. Разбери переписку менеджера застройщика по шагам – каждый ответ менеджера отдельно. {STYLE}
+    return f"""Ты – Анастасия Гавриш, эксперт по продажам. Разбери переписку ({n['role']} и клиент) по шагам – каждый ответ менеджера отдельно. {STYLE}
 
-{RULES}
+{VOICE}
+
+{n['rules']}
 
 Клиент: {c['name']}, {c['sub']}. Что о клиенте было скрыто: {c['brief']}
-Что было у менеджера в продаже: {PROJECT_TEXT}
+Что было у менеджера в продаже: {n['project_text']}
 Сообщения вида [Файл: …] – файлы, которые менеджер отправил прямо в чат.
 
 Полная переписка для контекста:
@@ -243,7 +281,9 @@ def steps_prompt(g, t):
 Ответы менеджера по шагам:
 {lines}
 
-Для каждого шага оцени ответ менеджера и напиши, как ответить правильно, чтобы клиент не слился и пошел к встрече. Готовый ответ пиши так, как менеджер отправил бы его клиенту в мессенджер, коротко и по-человечески, с вопросом или следующим шагом в конце.
+{STEPS_EXAMPLE}
+
+Для каждого шага оцени ответ менеджера и напиши, как ответить правильно, чтобы клиент не слился и задача была выполнена – {n['goal']}. Готовый ответ пиши так, как менеджер отправил бы его клиенту в мессенджер, коротко и по-человечески, по правилам выше, с вопросом или следующим шагом в конце. Цены, препараты и условия бери только из того, что было в продаже.
 Верни строго JSON без markdown – объект с полем steps, в нем массив ровно из {len(t)} элементов в том же порядке:
 {{"steps": [{{"ok": true или false, "comment": "1–2 предложения – что хорошо или где ошибка и почему клиенту это не понравится", "better": "как стоило ответить – готовое сообщение клиенту; если ответ был хорош, можно оставить пустую строку"}}]}}"""
 
@@ -280,9 +320,9 @@ def start_kb():
                                                  [InlineKeyboardButton(text="👔 Проверить мой отдел продаж", callback_data="own")]])
 
 
-def nums_text(n):
+def nums_text(n, check="средняя квартира"):
     t = till(n)
-    return (f"Цифры для кассы – реклама {money(n['budget'])} в месяц, лид {money(n['cpl'])}, средняя квартира {money(n['check'])}, "
+    return (f"Цифры для кассы – реклама {money(n['budget'])} в месяц, лид {money(n['cpl'])}, {check} {money(n['check'])}, "
             f"норма лид → сделка {('%g' % n['conv']).replace('.', ',')}%.\nЭто {round(t['leads'])} лидов и {t['deals']:.1f} сделок в месяц – "
             f"касса {short(t['total'])}.".replace(".0 сделок", " сделок"))
 
@@ -469,9 +509,11 @@ def team_link(name, tid):
 
 
 def invite_text(t, link):
+    n = own.team_niche(t)
     web_link = f"\n\nБез Telegram – на сайте: {WEBAPP_URL}/?team={t['id']}" if WEBAPP_URL else ""
-    return (f"Коллеги, пройдите, пожалуйста, короткую проверку переписки – это игра в Telegram. Пять клиентов застройщика пишут вам в мессенджер, "
-            f"ваша задача – довести их до встречи. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}{web_link}")
+    who = "клиентов застройщика" if n["id"] == "realestate" else "клиентов"
+    return (f"Коллеги, пройдите, пожалуйста, короткую проверку переписки – это игра в Telegram. Пять {who} пишут вам в мессенджер, "
+            f"ваша задача – {n['goal'].replace('клиента', 'каждого')}. Займет 20–30 минут. Отвечайте так же, как в работе.\n\n{link}{web_link}")
 
 
 def is_admin(u):
@@ -509,13 +551,13 @@ async def review_one(g, outcome):
     return v, steps
 
 
-async def fill_missing_reviews(ps, nums):
+async def fill_missing_reviews(ps, nums, niche_id=None):
     """Если разбор переписки не сохранился (сбой нейросети), делаем его заново перед отчетом."""
     sem = asyncio.Semaphore(3)
 
     async def one(p, k, r):
         async with sem:
-            g = SimpleNamespace(i=k, log=r.get("log") or [], turns=len(manager_turns(r.get("log") or [])), nums=nums)
+            g = SimpleNamespace(i=k, log=r.get("log") or [], turns=len(manager_turns(r.get("log") or [])), nums=nums, niche=niche_id)
             v, steps = await review_one(g, "lost" if r.get("lost") else "meeting")
             if v or steps:
                 r["v"] = r.get("v") or v
@@ -540,16 +582,17 @@ async def send_report(bot, chat_id, tid, uid):
         return
     tot = till(own.team_nums(t))["total"]
     await bot.send_message(chat_id, "<i>Анастасия собирает отчет по отделу… это занимает до минуты</i>")
-    await fill_missing_reviews(ps, own.team_nums(t))
+    n = own.team_niche(t)
+    await fill_missing_reviews(ps, own.team_nums(t), n["id"])
     summary = None
     try:
-        summary = await llm_json(own.team_summary_prompt(t, ps, STYLE, RULES), dict, MODEL_SMART, temperature=0.4, max_tokens=2500)
+        summary = await llm_json(own.team_summary_prompt(t, ps, STYLE, VOICE), dict, MODEL_SMART, temperature=0.4, max_tokens=2500)
     except Exception as e:
         log.warning("team summary: %s", e)
     lines = [f"📊 <b>Отчет по отделу «{esc(t['title'])}»</b>", f"Менеджеров – {len(ps)}, закончили – {sum(1 for p in ps if p['finished'])}"]
     for p in sorted(ps, key=lambda p: -own.player_stats(p, tot)["meetings"]):
         st = own.player_stats(p, tot)
-        lines.append(f"• <b>{esc(p['alias'])}</b> – встречи {st['meetings']} из {st['done']}, потери ~{short(st['loss'])}/мес")
+        lines.append(f"• <b>{esc(p['alias'])}</b> – {n['wins']} {st['meetings']} из {st['done']}, потери ~{short(st['loss'])}/мес")
     if summary:
         if summary.get("headline"):
             lines.append(f"\n<b>{esc(summary['headline'])}</b>")
@@ -566,6 +609,9 @@ async def send_report(bot, chat_id, tid, uid):
 
 async def start_team_game(bot, chat_id, uid, tid, alias):
     t = own.team(tid)
+    if own.team_niche(t)["id"] != "realestate":
+        await bot.send_message(chat_id, "Эта проверка открывается только в веб-версии игры. Попросите руководителя прислать ссылку на сайт.")
+        return
     g = Game(own.team_nums(t))
     g.team, g.alias = tid, alias
     g.pid = own.start_player(tid, uid, alias)
@@ -603,9 +649,7 @@ async def cmd_start(m: Message, command: CommandObject):
             await m.answer("Вы уже прошли эту проверку – результат у руководителя. Спасибо!")
             return
         if WEBAPP_URL:
-            await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n"
-                           "Вы – менеджер застройщика в Алматы. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, "
-                           "онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.",
+            await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n" + esc(own.team_niche(t)["page"]["team"]),
                            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                                text="▶️ Начать проверку", web_app=WebAppInfo(url=f"{WEBAPP_URL}/?team={t['id']}"))]]))
             return
@@ -614,6 +658,12 @@ async def cmd_start(m: Message, command: CommandObject):
                        "Вы – менеджер застройщика в Алматы. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, "
                        "онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.\n\n"
                        "Как подписать вас в отчете? Напишите имя или любой псевдоним.", reply_markup=ReplyKeyboardRemove())
+        return
+    if arg.startswith("n_") and arg[2:] in NICHES and WEBAPP_URL:
+        n = NICHES[arg[2:]]
+        await m.answer(f"<b>Сколько отдел теряет в переписке – {esc(n['project_name'])}</b>\n\n{esc(n['page']['lead'])}",
+                       reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                           text="▶️ Играть", web_app=WebAppInfo(url=f"{WEBAPP_URL}/?niche={n['id']}"))]]))
         return
     await m.answer(START_TEXT, reply_markup=ReplyKeyboardRemove())
     if WEBAPP_URL:
@@ -754,8 +804,14 @@ async def cb_link(q: CallbackQuery):
 async def cmd_code(m: Message, command: CommandObject):
     if not is_admin(m.from_user):
         return
-    code = own.new_code(command.args or "")
-    await m.answer(f"Новый код доступа для собственника:\n<code>{code}</code>\n\nОн открывает режим «Проверить мой отдел продаж» для одного отдела.")
+    args = (command.args or "").split(maxsplit=1)
+    nid = "realestate"
+    if args and args[0].lower() in NICHES:
+        nid = args.pop(0).lower()
+    code = own.new_code(args[0] if args else "", nid)
+    await m.answer(f"Новый код доступа для собственника, ниша «{NICHES[nid]['title']}»:\n<code>{code}</code>\n\n"
+                   "Он открывает режим «Проверить мой отдел продаж» для одного отдела.\n"
+                   f"Другие ниши: {', '.join(f'/code {k}' for k in NICHES if k != nid)}")
 
 
 @router.message(Command("codes"))
@@ -766,7 +822,7 @@ async def cmd_codes(m: Message):
     if not rows:
         await m.answer("Кодов пока нет. Создать – /code")
         return
-    await m.answer("<b>Коды доступа</b>\n" + "\n".join(f"<code>{r['code']}</code> – {'использован' if r['used_by'] else 'свободен'}"
+    await m.answer("<b>Коды доступа</b>\n" + "\n".join(f"<code>{r['code']}</code> – {niche(r['niche'])['title']}, {'использован' if r['used_by'] else 'свободен'}"
                                                          + (f" · {esc(r['note'])}" if r['note'] else "") for r in rows))
 
 
@@ -807,15 +863,16 @@ async def on_text(m: Message):
             return
         WAIT_CODE.discard(uid)
         WAIT_TITLE[uid] = code
-        await m.answer("Код принят. Как назвать отдел в отчете? Например «Отдел продаж ЖК Тау».")
+        await m.answer("Код принят. Как назвать отдел в отчете? Например «Отдел продаж Алматы».")
         return
     if uid in WAIT_TITLE:
         title = re.sub(r"\s+", " ", m.text).strip()[:60] or "Отдел продаж"
         code = WAIT_TITLE.pop(uid)
-        tid = own.create_team(uid, m.chat.id, title, code, NUMS.get(uid, DEFAULT_NUMBERS))
+        nid = own.code_niche(code)
+        tid = own.create_team(uid, m.chat.id, title, code, NUMS.get(uid, DEFAULT_NUMBERS) if nid == "realestate" else niche(nid)["nums"], nid)
         t = own.team(tid)
         link = team_link(await bot_name(m.bot), tid)
-        await m.answer(f"Отдел «{esc(title)}» создан. Касса считается по вашим цифрам: {nums_text(own.team_nums(t))}\n\n"
+        await m.answer(f"Отдел «{esc(title)}» создан. Касса считается по цифрам: {nums_text(own.team_nums(t), own.team_niche(t)['page']['check'].replace(', ₸', '').lower())}\n\n"
                        "Перешлите менеджерам сообщение ниже. Когда каждый закончит, я пришлю вам уведомление, а отчет по отделу можно открыть в любой момент – /team")
         await m.answer(invite_text(t, link), disable_web_page_preview=True)
         return

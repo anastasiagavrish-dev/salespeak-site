@@ -8,7 +8,7 @@ import sqlite3
 import string
 import time
 
-from game_data import CLIENTS, PROJECT
+from game_data import niche
 
 DB = None
 
@@ -27,6 +27,11 @@ def db():
                                            started INT, finished INT, results TEXT);
         CREATE INDEX IF NOT EXISTS players_team ON players(team_id);
         """)
+        # ниша игры (недвижимость, пептиды…) – у кода и у отдела
+        for tbl in ("codes", "teams"):
+            if "niche" not in [r[1] for r in DB.execute(f"PRAGMA table_info({tbl})")]:
+                DB.execute(f"ALTER TABLE {tbl} ADD COLUMN niche TEXT DEFAULT 'realestate'")
+        DB.commit()
     return DB
 
 
@@ -35,9 +40,9 @@ def _rand(n, alphabet=string.ascii_uppercase + string.digits):
 
 
 # ---------------- коды доступа ----------------
-def new_code(note=""):
+def new_code(note="", niche_id="realestate"):
     code = "KT-" + _rand(6, "ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
-    db().execute("INSERT INTO codes(code, created, note) VALUES(?,?,?)", (code, int(time.time()), note))
+    db().execute("INSERT INTO codes(code, created, note, niche) VALUES(?,?,?,?)", (code, int(time.time()), note, niche_id))
     db().commit()
     return code
 
@@ -58,10 +63,16 @@ def use_code(code, owner_id):
     return code, ""
 
 
+def code_niche(code):
+    r = db().execute("SELECT niche FROM codes WHERE code=?", (code,)).fetchone()
+    return (r and r["niche"]) or "realestate"
+
+
 # ---------------- отделы ----------------
-def create_team(owner_id, owner_chat, title, code, nums):
+def create_team(owner_id, owner_chat, title, code, nums, niche_id="realestate"):
     tid = _rand(8, string.ascii_lowercase + string.digits)
-    db().execute("INSERT INTO teams VALUES(?,?,?,?,?,?,?)", (tid, owner_id, owner_chat, title, code, json.dumps(nums), int(time.time())))
+    db().execute("INSERT INTO teams(id, owner_id, owner_chat, title, code, nums, created, niche) VALUES(?,?,?,?,?,?,?,?)",
+                 (tid, owner_id, owner_chat, title, code, json.dumps(nums), int(time.time()), niche_id))
     db().commit()
     return tid
 
@@ -78,10 +89,14 @@ def team_nums(t):
     return json.loads(t["nums"])
 
 
+def team_niche(t):
+    return niche(t["niche"] if t and "niche" in t.keys() else None)
+
+
 # ---------------- менеджеры ----------------
 def start_player(tid, tg_id, alias):
     old = db().execute("SELECT * FROM players WHERE team_id=? AND tg_id=?", (tid, tg_id)).fetchone()
-    empty = json.dumps([None] * len(CLIENTS))
+    empty = json.dumps([None] * len(team_niche(team(tid))["clients"]))
     if old:
         db().execute("UPDATE players SET alias=?, started=?, finished=NULL, results=? WHERE id=?", (alias, int(time.time()), empty, old["id"]))
         db().commit()
@@ -140,17 +155,20 @@ def team_errors(ps, limit=40):
     return out[:limit]
 
 
-def team_summary_prompt(t, ps, style, rules):
+def team_summary_prompt(t, ps, style, voice=""):
+    n = team_niche(t)
     lines = []
     for p in ps:
         for k, r in enumerate(p["results"]):
             if r and r.get("v"):
                 v = r["v"]
-                lines.append(f"{p['alias']} · {CLIENTS[k]['name']} · {'встреча' if not r.get('lost') else 'слит'} · этап «{v.get('stage', '')}» · ошибки: "
+                lines.append(f"{p['alias']} · {n['clients'][k]['name']} · {n['win'] if not r.get('lost') else 'слит'} · этап «{v.get('stage', '')}» · ошибки: "
                              + "; ".join(v.get("errors") or []))
-    return f"""Ты – Анастасия Гавриш, эксперт по продажам. Собственник застройщика проверил свой отдел продаж в тренажере – менеджеры переписывались с одними и теми же 5 клиентами. Ниже результаты по каждой переписке. {style}
+    return f"""Ты – Анастасия Гавриш, эксперт по продажам. Собственник проверил свой отдел продаж в тренажере ({n['project_name']}) – менеджеры переписывались с одними и теми же 5 клиентами, задача – {n['goal']}. Ниже результаты по каждой переписке. {style}
 
-{rules}
+{voice}
+
+{n['rules']}
 
 Результаты:
 {chr(10).join(lines)}
@@ -176,6 +194,8 @@ def _short(n):
 
 
 def report_html(t, ps, total, summary=None):
+    n = team_niche(t)
+    CLIENTS = n["clients"]
     rows, details = [], []
     ranked = sorted(ps, key=lambda p: (-player_stats(p, total)["meetings"], player_stats(p, total)["loss"]))
     for p in ranked:
@@ -201,7 +221,7 @@ def report_html(t, ps, total, summary=None):
                 + (('<p><b>Что не узнали о клиенте.</b> ' + _e(v.get('hidden')) + '</p>') if v.get('hidden') else '')
             if not verdict_html:
                 verdict_html = "<p class='muted'>Разбор этой переписки не загрузился – нейросеть не ответила. Он появится при следующем запросе отчета.</p>"
-            blocks.append(f"""<div class='client'><h4>{_e(CLIENTS[k]['name'])} – <span class='{'okc' if not r.get('lost') else 'badc'}'>{'встреча' if not r.get('lost') else 'слит'}</span>{(' · этап «' + _e(v.get('stage')) + '»') if v.get('stage') else ''}</h4>
+            blocks.append(f"""<div class='client'><h4>{_e(CLIENTS[k]['name'])} – <span class='{'okc' if not r.get('lost') else 'badc'}'>{n['win'] if not r.get('lost') else 'слит'}</span>{(' · этап «' + _e(v.get('stage')) + '»') if v.get('stage') else ''}</h4>
               {verdict_html}
               {('<p><b>Разбор по шагам – как надо было ответить</b></p><ol class="steps">' + steps + '</ol>') if steps else ''}
               <details><summary>Показать переписку</summary><div class='chat'>{chat}</div></details>
@@ -237,12 +257,12 @@ blockquote{{margin:6px 0;padding:8px 12px;border-left:3px solid #1e7b3a;backgrou
 footer{{margin-top:48px;color:#6e6e73;font-size:14px}}
 </style></head><body><div class="wrap">
 <h1>Отчет по отделу – {_e(t['title'])}</h1>
-<p class="sub">Тренажер «Касса тает» · {_e(PROJECT['name'])} (учебный ЖК) · менеджеров – {len(ps)} · {time.strftime('%d.%m.%Y')}</p>
+<p class="sub">Тренажер «Касса тает» · {_e(n['project_name'])} · менеджеров – {len(ps)} · {time.strftime('%d.%m.%Y')}</p>
 <div class="card"><p>Если отдел отвечает так всем заявкам, при ваших цифрах он недополучает в среднем</p>
 <p class="big">−{_short(tot_loss)} в месяц</p><p>Это −{_short(tot_loss * 12)} в год.</p></div>
 {sm}
 <h2>Менеджеры</h2>
-<table><tr><th>Менеджер</th><th>Клиенты</th><th>Встречи</th><th>Потери в месяц</th></tr>{''.join(rows)}</table>
+<table><tr><th>Менеджер</th><th>Клиенты</th><th>{n['wins'].capitalize()}</th><th>Потери в месяц</th></tr>{''.join(rows)}</table>
 <h2>Переписки и разборы</h2>{''.join(details)}
 <footer>Разбор подготовлен по методу Анастасии Гавриш. Хотите разобрать настоящие переписки вашего отдела – напишите <a href="https://t.me/gavrish_anastasiya">@gavrish_anastasiya</a>.</footer>
 </div></body></html>"""

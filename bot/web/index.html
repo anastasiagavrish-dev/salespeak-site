@@ -118,22 +118,23 @@ body.tg header .lead{font-size:14px}
 .ref th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .ref .tbl{overflow-x:auto;margin-top:10px}
 .ref ul{margin:10px 0 0;padding-left:18px;display:grid;gap:4px}
+.ref td.nw{white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <p class="label">Тренажер-диагностика · недвижимость · Алматы</p>
+    <p class="label" id="pLabel">Тренажер-диагностика</p>
     <h1>Сколько ваш отдел теряет в переписке</h1>
-    <p class="lead">Пять клиентов застройщика пишут в мессенджер. Вы отвечаете так, как отвечаете в работе. Каждый слитый клиент забирает деньги из кассы, а в конце – разбор каждой переписки в стиле Анастасии Гавриш. </p>
+    <p class="lead" id="pLead"></p>
   </header>
 
   <div id="err" class="warn" hidden></div>
   <div id="teamBox" class="card team" hidden>
     <p class="label">Проверка отдела продаж</p>
     <h2 id="teamTitle"></h2>
-    <p>Вы – менеджер застройщика. Пять клиентов по очереди пишут вам в мессенджер. Задача – довести каждого до встречи, онлайн или в офисе. Отвечайте так же, как в работе. После каждого клиента вы увидите разбор, а итог получит ваш руководитель.</p>
+    <p id="pTeam"></p>
     <form id="aliasForm" class="row"><input id="alias" maxlength="40" placeholder="Как подписать вас в отчете – имя или псевдоним" required><button>Начать проверку</button></form>
   </div>
 
@@ -150,7 +151,7 @@ body.tg header .lead{font-size:14px}
       <div class="inputs">
         <label for="budget">Реклама, ₸ в мес.<input id="budget" inputmode="numeric" value="3 000 000"></label>
         <label for="cpl">Стоимость лида, ₸<input id="cpl" inputmode="numeric" value="6 000"></label>
-        <label for="check">Средняя квартира, ₸<input id="check" inputmode="numeric" value="45 000 000"></label>
+        <label for="check"><span id="pCheck">Средний чек, ₸</span><input id="check" inputmode="numeric" value="45 000 000"></label>
         <label for="conv">Норма лид → сделка, %<input id="conv" inputmode="decimal" value="2"></label>
       </div>
       <p class="note">Цифры – пример, подставьте свои. Каждый клиент в игре – пятая часть вашего потока заявок. Если менеджер сливает его, касса теряет пятую часть.</p>
@@ -161,7 +162,7 @@ body.tg header .lead{font-size:14px}
       <div class="chat" id="chat">
         <div class="chat-head"><div class="av" id="hAv">?</div><div><b id="hName">Нажмите «Начать»</b><span id="hSub">клиент напишет первым</span></div></div>
         <div class="msgs" id="msgs" aria-live="polite">
-          <div class="m sys">Задача менеджера в переписке – не продать квартиру за 10 минут, а довести клиента до встречи: онлайн или в офисе, где подбирают квартиру по шахматке и считают оплату.</div>
+          <div class="m sys" id="pTask">Загружаю игру…</div>
         </div>
         <div class="attach" id="attachPanel" hidden>
           <p class="label">Что отправить клиенту</p>
@@ -183,7 +184,7 @@ body.tg header .lead{font-size:14px}
       <div id="verdictBox" class="card verdict" style="margin-top:16px" hidden></div>
       <div id="finalBox" class="card final" style="margin-top:16px" hidden></div>
       <details class="card ref" id="ref" open>
-        <summary><b>Шпаргалка менеджера</b> – что у вас есть в продаже</summary>
+        <summary><b>Шпаргалка менеджера</b> – <span id="pRef"></span></summary>
         <div id="refBody"></div>
       </details>
     </section>
@@ -191,38 +192,8 @@ body.tg header .lead{font-size:14px}
 </div>
 
 <script>
-const CLIENTS = [
-  {name:"Динара", short:"Д", sub:"ищет квартиру ближе к центру", first:"Здравствуйте, интересует ЖК ближе к центру. Какие есть квартиры до 60 квадратов?"},
-  {name:"Арман", short:"А", sub:"инвестор, берет под аренду", first:"Добрый день. Какие есть однушки под сдачу в аренду? Что по рассрочке?"},
-  {name:"Айгерим", short:"Ай", sub:"молодая семья, ипотека", first:"Здравствуйте! Мы с мужем хотим купить первую квартиру в ипотеку, что можете предложить?"},
-  {name:"Сергей", short:"С", sub:"переезжает из Москвы", first:"Здравствуйте, я из Москвы, планирую переезд в Алматы. Можно у вас купить квартиру удаленно?"},
-  {name:"Мадина", short:"М", sub:"сравнивает с соседним ЖК", first:"Скиньте цены на двушки в вашем ЖК"}
-];
-const PROJECT = {
-  name: "ЖК «Тау Сити»",
-  about: "Вымышленный жилой комплекс для тренажера. Алмалинский район, рядом улица Ленина и центральный стадион, 10 минут до Арбата. Бизнес-класс, 12 этажей, закрытый двор без машин, школа и садик в 5 минутах пешком.",
-  queues: "Очередь 1 – сдача в 1 квартале 2027. Очередь 2 – сдача в 3 квартале 2027. Застройщик сдал 6 проектов без задержек.",
-  price: "Квадратный метр от 850 000 до 980 000 ₸ – зависит от этажа и вида. Видовые квартиры на горы с 4 этажа.",
-  pay: "100% оплата – скидка 4%. Рассрочка 0% на 12 месяцев при взносе от 30%. Ипотека через банк-партнер, первоначальный взнос от 20%, расчет платежа делает менеджер на встрече. Сделка удаленно возможна – договор подписывается по ЭЦП или через представителя, оплата из-за рубежа банковским переводом.",
-  meet: "Онлайн-показ в Zoom 30–40 минут – шахматка, планировки, вид с этажа, расчет оплаты. Офис продаж на объекте, ежедневно 10:00–20:00, по выходным тоже.",
-  lots: [
-    {t:"1-комн.", m:"38 м²", f:"3 этаж, во двор", q:"очередь 1", p:"32,9 млн ₸"},
-    {t:"1-комн.", m:"42 м²", f:"7 этаж, на горы", q:"очередь 1", p:"39,8 млн ₸"},
-    {t:"2-комн.", m:"52 м²", f:"5 этаж, во двор", q:"очередь 2", p:"46,8 млн ₸"},
-    {t:"2-комн.", m:"58 м²", f:"4 этаж, на горы", q:"очередь 2", p:"52,2 млн ₸"},
-    {t:"3-комн.", m:"92 м²", f:"9 этаж, на горы", q:"очередь 1", p:"84,6 млн ₸"}
-  ]
-};
+let N = null, CLIENTS = [], FILES = [], MAX_TURNS = 8;   // данные ниши приходят с сервера
 
-const FILES = [
-  ...PROJECT.lots.map(l=>({title:`Планировка ${l.t} ${l.m}`, desc:`${l.f}, ${l.q}, ${l.p}`})),
-  {title:"Презентация ЖК «Тау Сити» (PDF)", desc:"локация, инфраструктура, очереди, отделка"},
-  {title:"Шахматка свободных квартир", desc:"свободные квартиры по этажам, цены"},
-  {title:"Условия оплаты (PDF)", desc:"100% со скидкой 4%, рассрочка 0% на 12 мес., ипотека от 20%"},
-  {title:"Видео вида с 4 и 9 этажа", desc:"вид на горы, 40 секунд"},
-  {title:"Ссылка на сайт застройщика", desc:"taucity.kz – каталог квартир"}
-];
-const MAX_TURNS = 8;
 const CONTACT = "gavrish_anastasiya";
 
 const $ = id => document.getElementById(id);
@@ -267,7 +238,7 @@ function renderTill(){
   $('bar').style.width = (t.total ? Math.max(0,left/t.total*100) : 100) + '%';
   $('clients').innerHTML = CLIENTS.map((c,i)=>{
     const r = state && state.results[i];
-    const pill = !r ? '<span class="pill wait">ждет</span>' : r.lost ? '<span class="pill bad">слит</span>' : '<span class="pill ok">встреча</span>';
+    const pill = !r ? '<span class="pill wait">ждет</span>' : r.lost ? '<span class="pill bad">слит</span>' : '<span class="pill ok">'+esc(N.win)+'</span>';
     const now = state && state.i===i && !r ? ' class="now"' : '';
     return `<li${now}><span class="av">${c.short}</span><span><b>${c.name}</b><br><span class="note">${c.sub}</span></span>${pill}</li>`;
   }).join('');
@@ -291,10 +262,11 @@ function turns(){ $('turns').textContent = state && state.i>=0 ? `Клиент $
 function doneCount(){ return state ? state.results.filter(Boolean).length : 0; }
 
 function renderRef(){
-  $('refBody').innerHTML = `<p style="margin:10px 0 0">${esc(PROJECT.about)}</p>
-    <div class="tbl"><table><thead><tr><th>Квартира</th><th>Площадь</th><th>Этаж и вид</th><th>Сдача</th><th>Цена</th></tr></thead><tbody>
-    ${PROJECT.lots.map(l=>`<tr><td>${l.t}</td><td>${l.m}</td><td>${l.f}</td><td>${l.q}</td><td>${l.p}</td></tr>`).join('')}</tbody></table></div>
-    <ul><li><b>Сроки.</b> ${esc(PROJECT.queues)}</li><li><b>Цена.</b> ${esc(PROJECT.price)}</li><li><b>Оплата.</b> ${esc(PROJECT.pay)}</li><li><b>Встреча.</b> ${esc(PROJECT.meet)}</li></ul>
+  const R = N.page.ref;
+  $('refBody').innerHTML = `<p style="margin:10px 0 0">${esc(R.about)}</p>
+    <div class="tbl"><table><thead><tr>${R.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>
+    ${R.rows.map(r=>`<tr>${r.map(x=>`<td${String(x).length<14?' class="nw"':''}>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <ul>${R.items.map(([b,t])=>`<li><b>${esc(b)}.</b> ${esc(t)}</li>`).join('')}</ul>
     <p class="note" style="margin-top:8px">Файлы отправляются кнопкой 📎 в чате. Клиент видит их так, как будто вы прислали картинку или PDF.</p>`;
   $('files').innerHTML = FILES.map((f,k)=>`<button type="button" data-k="${k}"><b>${esc(f.title)}</b><br><span class="note">${esc(f.desc)}</span></button>`).join('');
 }
@@ -342,7 +314,7 @@ async function send(e){
 async function closeClient(outcome){
   if (state.closing) return; state.closing = true;
   state.outcome = outcome; setInput(false); $('finishClient').hidden = true;
-  bubble('sys', outcome==='meeting' ? 'Встреча назначена. Клиент остается в кассе.' : 'Клиент ушел. Касса теряет пятую часть.');
+  bubble('sys', outcome==='meeting' ? N.win_sys : 'Клиент ушел. Касса теряет пятую часть.');
   const share = till().total/CLIENTS.length;
   state.results[state.i] = {lost: outcome!=='meeting'}; renderTill(); $('finishGame').hidden = false;
   if (outcome!=='meeting') bubble('sys', `−${short(share)} из кассы`);
@@ -353,7 +325,7 @@ async function closeClient(outcome){
 
 async function renderReview(outcome, share){
   const box = $('verdictBox'); const i = state.i; const c = CLIENTS[i]; const logCopy = state.log.slice();
-  const head = outcome==='meeting' ? `<span class="pill ok">встреча</span>` : `<span class="pill bad">слит · −${short(share)}</span>`;
+  const head = outcome==='meeting' ? `<span class="pill ok">${esc(N.win)}</span>` : `<span class="pill bad">слит · −${short(share)}</span>`;
   box.innerHTML = `<div class="row"><p class="label" style="margin:0">Разбор · ${c.name}</p>${head}</div>
     <div id="vMain"><p class="typing">Анастасия читает переписку… обычно это занимает до минуты</p></div>
     <div id="vSteps"><p class="label">Разбор по шагам</p><p class="typing">Готовлю подсказки к каждому вашему ответу…</p></div>
@@ -401,7 +373,7 @@ function finale(){
   const teamNote = teamInfo ? `<p><b>Результат и разборы отправлены руководителю.</b> Спасибо, что прошли проверку!</p>` : '';
   box.innerHTML = `<p class="label">${teamInfo ? 'Ваш итог' : 'Итог по отделу'}</p>
     <div class="cash" style="color:${lost?'var(--bad)':'var(--ok)'}">−${short(lostShare*t.total)} в месяц</div>
-    <p>Пройдено клиентов: ${done.length} из ${CLIENTS.length}, до встречи дошли ${done.length-lost}. Если менеджер так отвечает всем, при этих цифрах отдел недополучает около <b>${short(lostShare*t.total)}</b> в месяц и <b>${short(lostShare*t.total*12)}</b> в год.</p>
+    <p>Пройдено клиентов: ${done.length} из ${CLIENTS.length}, ${esc(N.reach)} ${done.length-lost}. Если менеджер так отвечает всем, при этих цифрах отдел недополучает около <b>${short(lostShare*t.total)}</b> в месяц и <b>${short(lostShare*t.total*12)}</b> в год.</p>
     ${teamNote}
     ${allErr.length?`<div><p class="label">Ошибки, которые повторялись</p><ul>${allErr.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
     <p class="big" style="font:600 18px/1.35 var(--display)">Реклама может приводить 100% целевых клиентов, но если менеджер сливает их в переписке, чем больше вы тратите на трафик, тем больше теряете.</p>
@@ -420,7 +392,7 @@ async function startGame(){
   if (busy) return;
   showErr(''); $('start').disabled = true;
   try{
-    const r = await api('/api/session', {initData: TG ? TG.initData : '', team: TEAM, alias, nums: teamInfo ? null : nums()});
+    const r = await api('/api/session', {initData: TG ? TG.initData : '', team: TEAM, niche: N.id, alias, nums: teamInfo ? null : nums()});
     sid = r.sid; setNums(r.nums);
   }catch(err){
     $('start').disabled = false;
@@ -441,7 +413,6 @@ $('txt').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey && !
 $('start').onclick = () => { if (state && state.i>=0 && !confirm('Начать игру заново? Текущая переписка пропадет.')) return; startGame(); };
 $('finishClient').onclick = () => { if(state && !busy) closeClient('lost'); };
 
-renderRef(); renderTill();
 // если менеджер закрыл игру, не дойдя до итога, – руководитель получит то, что уже пройдено
 function beaconPartial(){
   if (!sid || !teamInfo || !state || state.finished || !doneCount()) return;
@@ -449,16 +420,37 @@ function beaconPartial(){
 }
 window.addEventListener('pagehide', beaconPartial);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') beaconPartial(); });
-if (TEAM){
-  fetch('/api/team?team=' + encodeURIComponent(TEAM)).then(r=>r.json()).then(t=>{
-    if (t.error){ showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.'); return; }
-    teamInfo = t; setNums(t.nums); renderTill();
-    $('teamTitle').textContent = t.title; $('teamBox').hidden = false; $('start').hidden = true;
-    ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true);
-    const nm = TG && TG.initDataUnsafe && TG.initDataUnsafe.user && TG.initDataUnsafe.user.first_name; if (nm) $('alias').value = nm;
-  }).catch(()=>showErr('Не получилось открыть проверку – сбой связи.'));
-  $('aliasForm').addEventListener('submit', e=>{ e.preventDefault(); alias = $('alias').value.trim(); if(!alias) return; $('teamBox').hidden = true; startGame(); });
+function applyNiche(n){
+  N = n; CLIENTS = n.clients; FILES = n.files; MAX_TURNS = n.max_turns;
+  $('pLabel').textContent = n.page.label; $('pLead').textContent = n.page.lead; $('pTeam').textContent = n.page.team;
+  $('pTask').textContent = n.page.task; $('pCheck').textContent = n.page.check; $('pRef').textContent = n.page.ref.title;
+  document.title = 'Касса тает – ' + n.project_name;
+  setNums(n.nums); renderRef(); renderTill();
 }
+async function loadNiche(id){
+  const r = await fetch('/api/niche?n=' + encodeURIComponent(id || ''));
+  if (!r.ok) throw new Error('niche');
+  applyNiche(await r.json());
+}
+async function init(){
+  $('start').disabled = true;
+  try{
+    if (TEAM){
+      const r = await fetch('/api/team?team=' + encodeURIComponent(TEAM)); const t = await r.json();
+      if (t.error){ await loadNiche(''); showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.'); return; }
+      await loadNiche(t.niche);
+      teamInfo = t; setNums(t.nums); renderTill();
+      $('teamTitle').textContent = t.title; $('teamBox').hidden = false; $('start').hidden = true;
+      ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true);
+      const nm = TG && TG.initDataUnsafe && TG.initDataUnsafe.user && TG.initDataUnsafe.user.first_name; if (nm) $('alias').value = nm;
+    } else {
+      await loadNiche(params.get('niche') || (TG && TG.initDataUnsafe && (TG.initDataUnsafe.start_param||'').startsWith('n_') ? TG.initDataUnsafe.start_param.slice(2) : ''));
+    }
+  }catch(e){ showErr('Не получилось открыть игру – сбой связи. Обновите страницу.'); return; }
+  finally { $('start').disabled = false; }
+}
+if (TEAM) $('aliasForm').addEventListener('submit', e=>{ e.preventDefault(); if(!N) return; alias = $('alias').value.trim(); if(!alias) return; $('teamBox').hidden = true; startGame(); });
+init();
 </script>
 </body>
 </html>
