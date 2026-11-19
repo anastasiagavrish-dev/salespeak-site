@@ -105,7 +105,7 @@ REALESTATE_RU = _build_ru()
 from game_niches import build as _build_niche  # noqa: E402
 
 NICHES = {"realestate": REALESTATE, "realestate_ru": REALESTATE_RU}
-for _kind in ("dental", "spa", "school", "travel", "fitness", "kids", "b2b"):
+for _kind in ("dental", "spa", "school", "travel", "fitness", "kids", "measure", "b2b"):
     for _c in ("kz", "ru"):
         NICHES[f"{_kind}_{_c}"] = _build_niche(_kind, _c, REALESTATE["page"])
 NICHES["peptides"] = PEPTIDES
