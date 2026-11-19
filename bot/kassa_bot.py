@@ -27,7 +27,9 @@ TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 LLM_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_BASE = os.environ.get("LLM_BASE", "https://api.deepseek.com").rstrip("/")
 MODEL_FAST = os.environ.get("LLM_MODEL_FAST", "deepseek-flash")    # реплики клиентов
-MODEL_SMART = os.environ.get("LLM_MODEL_SMART", "deepseek-v4-pro")  # разборы
+# Разборы тоже пишет быстрая модель: deepseek-v4-pro – рассуждающая, тратит весь лимит на размышления
+# и возвращает пустой ответ (finish_reason=length). Сменить можно переменной LLM_MODEL_REVIEW.
+MODEL_SMART = os.environ.get("LLM_MODEL_REVIEW", MODEL_FAST)
 GAMES_PER_DAY = int(os.environ.get("GAMES_PER_DAY", "3"))
 DATA_DIR = os.environ.get("BOT_DATA", "/var/lib/kassa-bot")
 CONTACT = os.environ.get("CONTACT", "gavrish_anastasiya")
