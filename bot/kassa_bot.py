@@ -113,10 +113,12 @@ async def llm_json(prompt, want, model, temperature=0.6, max_tokens=1500, tries=
     # чтобы разбор успевал прийти, пока страница ждет ответа
     for k in range(1 if smart else tries):
         try:
-            v = parse_json(await llm(prompt, model, temperature, max_tokens, timeout=70 if smart else 60), want)
+            text = await llm(prompt, model, temperature, max_tokens, timeout=70 if smart else 90)
+            v = parse_json(text, want)
             if v is not None:
                 return v
             last = ValueError("ответ не в формате JSON")
+            log.warning("LLM %s: не JSON, %s символов, конец: %r", model, len(text or ""), (text or "")[-200:])
         except Exception as e:  # сеть, лимиты, ошибки API
             last = e
             log.warning("LLM: %s", e)
@@ -232,16 +234,18 @@ STEPS_EXAMPLE = """Пример одного шага в ее голосе:
  "better": "Добрый вечер, Алина! Меня зовут Мадина 😊 Чтобы не грузить вас всем прайсом, подберу под вас – ответьте, пожалуйста, на три вопроса: 1. Для кого программа? 2. На какой день планируете? 3. Что важнее – расслабиться или восстановиться после нагрузки? Можно голосовым, как удобнее."}"""
 
 
-def verdict_prompt(g, outcome):
+def verdict_prompt(g, outcome, compact=False):
+    """compact – запасной короткий вариант без описания голоса и примера, если полный не прошел."""
     n = nz(g)
     c = n["clients"][g.i]
+    voice, tone, example = ("", "", "") if compact else (VOICE, n.get("tone", ""), VERDICT_EXAMPLE)
     return f"""Ты – Анастасия Гавриш, эксперт по продажам. Ты разбираешь переписку ({n['role']} и клиент) для собственника бизнеса. {STYLE} Честно называй ошибки, отмечай, что получилось хорошо.
 
-{VOICE}
+{voice}
 
 {n['rules']}
 
-{n.get('tone', '')}
+{tone}
 
 Клиент: {c['name']}, {c['sub']}. Что о клиенте было скрыто: {c['brief']}
 {('Верный маршрут по скриптам компании: ' + c['route']) if c.get('route') else ''}
@@ -253,7 +257,7 @@ def verdict_prompt(g, outcome):
 Переписка:
 {transcript(g.log)}
 
-{VERDICT_EXAMPLE}
+{example}
 
 Пиши именно про эту переписку и эту нишу, пример – только образец голоса и формата. Верни строго JSON без markdown:
 {{"stage": одно из {json.dumps(n['stages'], ensure_ascii=False)} – последний этап, который менеджер реально прошел,
@@ -292,6 +296,15 @@ def steps_prompt(g, t):
 Для каждого шага оцени ответ менеджера и напиши, как ответить правильно, чтобы клиент не слился и задача была выполнена – {n['goal']}. Готовый ответ пиши так, как живой менеджер отправил бы его клиенту в мессенджер – коротко, тепло и по-человечески, словами клиента, по правилам и в голосе выше, с вопросом или следующим шагом в конце. Не пиши как нейросеть: без канцелярита, без перечислений там, где хватит одной фразы, без «понимаю ваши переживания» и «хороший вопрос». Цены, препараты и условия бери только из того, что было в продаже.
 Верни строго JSON без markdown – объект с полем steps, в нем массив ровно из {len(t)} элементов в том же порядке:
 {{"steps": [{{"ok": true или false, "comment": "1–2 предложения – что хорошо или где ошибка и почему клиенту это не понравится", "better": "как стоило ответить – готовое сообщение клиенту; если ответ был хорош, можно оставить пустую строку"}}]}}"""
+
+
+async def get_verdict(g, outcome):
+    """Общий разбор: полный промпт, а если не прошел – короткий, чтобы разбор все равно пришел."""
+    try:
+        return await llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=4000, tries=1)
+    except Exception as e:
+        log.warning("verdict: полный не прошел (%s), пробую короткий", e)
+    return await llm_json(verdict_prompt(g, outcome, compact=True), dict, MODEL_FAST, temperature=0.3, max_tokens=4000)
 
 
 # ---------------- тексты ----------------
@@ -393,7 +406,7 @@ async def close_client(bot, chat_id, g, outcome):
     stop = asyncio.Event()
     tl = asyncio.create_task(typing_loop(bot, chat_id, stop))
     turns = manager_turns(g.log)
-    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=2500))
+    vt = asyncio.create_task(get_verdict(g, outcome))
     st = asyncio.create_task(llm_json(steps_prompt(g, turns), dict, MODEL_SMART, temperature=0.4, max_tokens=5000)) if turns else None
     v = s = None
     try:
@@ -544,7 +557,7 @@ async def owner_menu(m_or_q, uid):
 async def review_one(g, outcome):
     turns = manager_turns(g.log)
     v = steps = None
-    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=2500))
+    vt = asyncio.create_task(get_verdict(g, outcome))
     st = asyncio.create_task(llm_json(steps_prompt(g, turns), dict, MODEL_SMART, temperature=0.4, max_tokens=5000)) if turns else None
     try:
         v = await vt

@@ -234,7 +234,7 @@ function renderTill(){
   const t = till(); const share = t.total/CLIENTS.length;
   const lostN = state ? state.results.filter(r=>r && r.lost).length : 0;
   const left = t.total - lostN*share;
-  $('cash').innerHTML = short(left) + ' <small>из ' + short(t.total) + '</small>';
+  $('cash').innerHTML = short(left) + ' <small style="white-space:nowrap">из ' + short(t.total) + '</small>';
   $('cashNote').textContent = Math.round(t.leads) + ' лидов в месяц, при норме ' + t.deals.toFixed(1).replace('.',',') + ' сделок';
   $('lost').textContent = short(lostN*share);
   $('mcashV').textContent = short(left); $('mcashL').textContent = lostN ? '−' + short(lostN*share) : 'из ' + short(t.total);

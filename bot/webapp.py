@@ -166,7 +166,7 @@ async def api_review(req):
     g = game_of(s, data)
     outcome = "meeting" if data.get("outcome") == "meeting" else "lost"
     turns = K.manager_turns(g.log)
-    vt = asyncio.create_task(K.llm_json(K.verdict_prompt(g, outcome), dict, K.MODEL_SMART, temperature=0.4, max_tokens=2500))
+    vt = asyncio.create_task(K.get_verdict(g, outcome))
     st = asyncio.create_task(K.llm_json(K.steps_prompt(g, turns), dict, K.MODEL_SMART, temperature=0.4, max_tokens=5000)) if turns else None
     v = steps = None
     try:
