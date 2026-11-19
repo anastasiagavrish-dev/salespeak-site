@@ -2,6 +2,7 @@
 Имен менеджеров бот не спрашивает – только псевдоним, который менеджер вводит сам."""
 import html
 import json
+import random
 import os
 import secrets
 import sqlite3
@@ -31,6 +32,9 @@ def db():
         for tbl in ("codes", "teams"):
             if "niche" not in [r[1] for r in DB.execute(f"PRAGMA table_info({tbl})")]:
                 DB.execute(f"ALTER TABLE {tbl} ADD COLUMN niche TEXT DEFAULT 'realestate'")
+        # какие клиенты из ниши достались отделу – у всех менеджеров одни и те же, чтобы сравнивать
+        if "pick" not in [r[1] for r in DB.execute("PRAGMA table_info(teams)")]:
+            DB.execute("ALTER TABLE teams ADD COLUMN pick TEXT")
         DB.commit()
     return DB
 
@@ -91,6 +95,24 @@ def team_nums(t):
 
 def team_niche(t):
     return niche(t["niche"] if t and "niche" in t.keys() else None)
+
+
+def pick_clients(n):
+    """Случайные клиенты на одну игру: в нише может быть больше профилей, чем клиентов в игре."""
+    k = min(n.get("per_game", 5), len(n["clients"]))
+    return random.sample(range(len(n["clients"])), k) if k < len(n["clients"]) else list(range(k))
+
+
+def team_pick(t):
+    n = team_niche(t)
+    if t["pick"] if "pick" in t.keys() else None:
+        p = [i for i in json.loads(t["pick"]) if 0 <= i < len(n["clients"])]
+        if p:
+            return p
+    p = pick_clients(n)
+    db().execute("UPDATE teams SET pick=? WHERE id=?", (json.dumps(p), t["id"]))
+    db().commit()
+    return p
 
 
 # ---------------- менеджеры ----------------
@@ -196,12 +218,13 @@ def _short(n):
 def report_html(t, ps, total, summary=None):
     n = team_niche(t)
     CLIENTS = n["clients"]
+    pick = team_pick(t)
     rows, details = [], []
     ranked = sorted(ps, key=lambda p: (-player_stats(p, total)["meetings"], player_stats(p, total)["loss"]))
     for p in ranked:
         s = player_stats(p, total)
         marks = "".join("<span class='m n'>–</span>" if not r else (f"<span class='m bad' title='{_e(CLIENTS[k]['name'])}'>✕</span>" if r.get("lost")
-                        else f"<span class='m ok' title='{_e(CLIENTS[k]['name'])}'>✓</span>") for k, r in enumerate(p["results"]))
+                        else f"<span class='m ok' title='{_e(CLIENTS[k]['name'])}'>✓</span>") for k, r in ((k, p["results"][k] if k < len(p["results"]) else None) for k in pick))
         rows.append(f"<tr><td><b>{_e(p['alias'])}</b>{'' if p['finished'] else ' <i>(не закончил)</i>'}</td><td>{marks}</td>"
                     f"<td>{s['meetings']} из {s['done']}</td><td class='loss'>−{_short(s['loss'])}</td></tr>")
         blocks = []

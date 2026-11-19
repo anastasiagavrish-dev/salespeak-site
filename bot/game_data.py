@@ -67,7 +67,7 @@ DEFAULT_NUMBERS = dict(budget=3_000_000, cpl=6_000, check=45_000_000, conv=2.0)
 from game_peptides import PEPTIDES  # noqa: E402
 
 REALESTATE = dict(
-    id="realestate", title="Недвижимость", clients=CLIENTS, rules=RULES, project_text=PROJECT_TEXT, stages=STAGES,
+    id="realestate", title="Недвижимость", clients=CLIENTS, per_game=5, rules=RULES, project_text=PROJECT_TEXT, stages=STAGES,
     files=FILES, max_turns=MAX_TURNS, nums=DEFAULT_NUMBERS, project_name=PROJECT["name"] + " (учебный ЖК)",
     role="менеджер застройщика",
     client_ctx="Тебе пишет менеджер застройщика в WhatsApp. Ты не помощник и не продавец – ты обычный человек, который ищет квартиру в Алматы.",

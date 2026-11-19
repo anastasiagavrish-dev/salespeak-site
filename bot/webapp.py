@@ -69,9 +69,10 @@ def session(req, data):
 
 def game_of(s, data):
     n = niche(s["niche"])
-    i = int(data.get("i", -1))
-    if not 0 <= i < len(n["clients"]):
+    pos = int(data.get("i", -1))   # номер клиента в этой игре, у сервера – номер профиля в нише
+    if not 0 <= pos < len(s["pick"]):
         raise web.HTTPBadRequest(text=json.dumps({"error": "client"}), content_type="application/json")
+    i = s["pick"][pos]
     g = SimpleNamespace(i=i, log=clean_log(data.get("log")), turns=min(n["max_turns"], max(1, int(data.get("turns", 1)))), nums=s["nums"],
                         niche=n["id"])
     if not g.log or g.log[0]["who"] != "client":
@@ -79,12 +80,18 @@ def game_of(s, data):
     return g
 
 
+def public_client(c):
+    return dict(name=c["name"], short=c["name"][:2] if c["name"].startswith("Ай") else c["name"][0], sub=c["sub"], first=c["first"])
+
+
 def public_niche(n):
-    """Что видит страница: без скрытых деталей клиентов и без правил разбора."""
+    """Что видит страница: без скрытых деталей клиентов и без правил разбора. Клиентов игры страница получает при старте."""
+    per = min(n.get("per_game", 5), len(n["clients"]))
+    random_pick = per < len(n["clients"])
     return dict(id=n["id"], title=n["title"], project_name=n["project_name"], max_turns=n["max_turns"], nums=n["nums"], page=n["page"],
-                win=n["win"], win_sys=n["win_sys"], wins=n["wins"], reach=n["reach"], files=n["files"],
-                clients=[dict(name=c["name"], short=c["name"][:2] if c["name"].startswith("Ай") else c["name"][0], sub=c["sub"], first=c["first"])
-                         for c in n["clients"]])
+                win=n["win"], win_sys=n["win_sys"], wins=n["wins"], reach=n["reach"], files=n["files"], random=random_pick,
+                clients=[dict(name=f"Клиент {k + 1}", short=str(k + 1), sub="откроется в игре", first="") for k in range(per)] if random_pick
+                else [public_client(c) for c in n["clients"]])
 
 
 def gc():
@@ -121,13 +128,13 @@ async def api_session(req):
             pass
     sid = secrets.token_urlsafe(18)
     s = dict(created=time.time(), who=who, user=user, team=t["id"] if t else None, pid=None, alias="", nums=dict(nums), calls=0,
-             niche=nid, results=[None] * len(nc["clients"]))
+             niche=nid, results=[None] * len(nc["clients"]), pick=own.team_pick(t) if t else own.pick_clients(nc))
     if t:
         alias = " ".join(str(data.get("alias") or "").split())[:40] or "Менеджер"
         uid = user["id"] if user else -abs(hash(who)) % (10 ** 12)
         s["alias"], s["pid"] = alias, own.start_player(t["id"], uid, alias)
     SESSIONS[sid] = s
-    return web.json_response({"sid": sid, "nums": s["nums"], "niche": nid, "team": {"title": t["title"]} if t else None,
+    return web.json_response({"sid": sid, "nums": s["nums"], "niche": nid, "clients": [public_client(nc["clients"][i]) for i in s["pick"]], "team": {"title": t["title"]} if t else None,
                               "name": (user or {}).get("first_name", "")})
 
 
@@ -218,7 +225,7 @@ async def api_finish(req):
         if s["team"] and done and not s.get("partial_sent"):
             s["partial_sent"] = True
             await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> закрыл или свернул игру, не дойдя до конца, отдел «{{team}}».\n"
-                                  f"Пока пройдено клиентов – {len(done)} из {len(n['clients'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss)}</b> в месяц. "
+                                  f"Пока пройдено клиентов – {len(done)} из {len(s['pick'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss)}</b> в месяц. "
                                   "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
         return web.json_response({"ok": True})
     s["finished"] = True
@@ -241,6 +248,7 @@ async def start(bot, kmod):
     K, BOT = kmod, bot
     app = web.Application(client_max_size=256 * 1024)
     app.router.add_get("/", index)
+    app.router.add_get("/favicon.ico", lambda req: web.FileResponse(os.path.join(WEB_DIR, "icon-180.png")))
     app.router.add_get("/api/team", api_team)
     app.router.add_get("/api/niche", api_niche)
     app.router.add_post("/api/session", api_session)
