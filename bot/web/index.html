@@ -421,13 +421,35 @@ function finale(){
     ${teamNote}
     ${allErr.length?`<div><p class="label">Ошибки, которые повторялись</p><ul>${allErr.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
     <p class="big" style="font:600 18px/1.35 var(--display)">Реклама может приводить 100% целевых клиентов, но если менеджер сливает их в переписке, чем больше вы тратите на трафик, тем больше теряете.</p>
-    <p>Хотите разобрать настоящие переписки вашего отдела? Напишите Анастасии в Telegram – <b>@${CONTACT}</b>.</p>
-    <div class="row">${teamInfo ? '' : '<button id="again" class="ghost">Пройти еще раз</button>'}<button id="write">Написать Анастасии</button></div>`;
+    ${teamInfo ? '' : weakSpot(done)}
+    <p>В игре клиенты учебные. Как ваши менеджеры отвечают настоящим клиентам, видно только по живым перепискам. Пришлите 4–6 диалогов – Анастасия бесплатно разберет их и покажет, где отдел теряет деньги.</p>
+    <div class="row"><button id="audit">Хочу бесплатный разбор</button><button id="write" class="ghost">Написать в Telegram</button>${teamInfo ? '' : '<button id="again" class="ghost">Пройти еще раз</button>'}</div>`;
   if ($('again')) $('again').onclick = () => { box.hidden=true; startGame(); };
   $('write').onclick = () => { const u = `https://t.me/${CONTACT}`; if (TG) TG.openTelegramLink(u); else window.open(u, '_blank', 'noopener'); };
+  $('audit').onclick = () => openSite('uslugi/audit/?from=game#offer');
   $('hName').textContent='Игра окончена'; $('hSub').textContent='смотрите итог ниже'; $('hAv').textContent='✓';
   state.i = -1; renderTill();
   box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+const SITE = 'https://a-gavrish.com/';
+function openSite(path){ const u = SITE + path; if (TG) try { TG.openLink(u); return; } catch(e){} window.open(u, '_blank', 'noopener'); }
+// Где отдел теряет чаще всего: этап, следующий за последним пройденным, у слитых клиентов – и какая работа это закрывает
+const WEAK = [
+  {t:'Клиентов теряют в самом начале', d:'Менеджер не знакомится, не выясняет, что нужно человеку, и сразу отдает цену или прайс. Это закрывает скрипт продаж – один сценарий от первого сообщения до оплаты.', s:'uslugi/skripty/', b:'Про скрипт продаж'},
+  {t:'Клиентов теряют на выяснении потребности', d:'Вопросов мало или они без пояснения, и менеджер так и не узнает, что для клиента важно. Это закрывает скрипт продаж с вопросами под вашу нишу.', s:'uslugi/skripty/', b:'Про скрипт продаж'},
+  {t:'Клиентов теряют на подборе', d:'Менеджер рассказывает обо всем подряд, а не о том, что нужно этому человеку. Это закрывает тренинг – отработка презентации на ваших реальных кейсах.', s:'uslugi/treningi/', b:'Про тренинг'},
+  {t:'Клиентов теряют на возражениях', d:'«Дорого», «подумаю», «посоветуюсь с мужем» – и менеджер отпускает. Это закрывает тренинг по возражениям на ваших реальных переписках.', s:'uslugi/treningi/', b:'Про тренинг'},
+  {t:'Клиентов теряют в шаге от сделки', d:'Разговор хороший, но менеджер не предлагает конкретное время или оплату, и клиент остается «подумать». Это закрывает скрипт с утвердительной попыткой сделки.', s:'uslugi/skripty/', b:'Про скрипт продаж'},
+];
+function weakSpot(done){
+  const lost = done.filter(r=>r.lost);
+  if (!lost.length) return `<div class="better"><b>Ни одного слитого клиента.</b> Осталось проверить, так же ли отвечают ваши менеджеры в жизни, – это видно только по их настоящим перепискам.</div>`;
+  const st = (N.stages||[]); const cnt = {};
+  lost.forEach(r=>{ const k = Math.min(st.indexOf(r.v && r.v.stage) + 1, WEAK.length-1); cnt[k]=(cnt[k]||0)+1; });
+  const k = +Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a] || a-b)[0]; const w = WEAK[k];
+  setTimeout(()=>{ const el=$('weakBtn'); if(el) el.onclick=()=>openSite(w.s); });
+  return `<div class="better"><p style="margin:0 0 6px"><b>${w.t}.</b> ${w.d}</p><button id="weakBtn" class="ghost" type="button">${w.b}</button></div>`;
 }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }

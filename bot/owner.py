@@ -287,5 +287,5 @@ footer{{margin-top:48px;color:#6e6e73;font-size:14px}}
 <h2>Менеджеры</h2>
 <table><tr><th>Менеджер</th><th>Клиенты</th><th>{n['wins'].capitalize()}</th><th>Потери в месяц</th></tr>{''.join(rows)}</table>
 <h2>Переписки и разборы</h2>{''.join(details)}
-<footer>Разбор подготовлен по методу Анастасии Гавриш. Хотите разобрать настоящие переписки вашего отдела – напишите <a href="https://t.me/gavrish_anastasiya">@gavrish_anastasiya</a>.</footer>
+<footer>Разбор подготовлен по методу Анастасии Гавриш. В игре клиенты учебные. Как ваши менеджеры отвечают настоящим клиентам, видно по живым перепискам – пришлите 4–6 диалогов, и Анастасия бесплатно разберет их: <a href="https://a-gavrish.com/uslugi/audit/?from=report#offer">заявка на разбор</a> или <a href="https://t.me/gavrish_anastasiya">@gavrish_anastasiya</a> в Telegram.</footer>
 </div></body></html>"""
