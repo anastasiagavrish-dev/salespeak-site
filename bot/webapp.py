@@ -146,10 +146,13 @@ async def api_session(req):
     if not t:
         day = time.time() - 86400
         STARTS[who] = [x for x in STARTS[who] if x > day]
-        unlimited = (user and (user.get("username") or "").lower() in K.ADMINS) or own.vip_ok(data.get("vip"))
+        want = data.get("niche") if data.get("niche") in NICHES else "realestate"
+        # закрытые ниши клиентов (ProPeptides) – подарок компании, без дневного лимита
+        unlimited = (user and (user.get("username") or "").lower() in K.ADMINS) or own.vip_ok(data.get("vip")) or not NICHES[want].get("public")
         if len(STARTS[who]) >= K.GAMES_PER_DAY and not unlimited:
             return web.json_response({"error": "daily", "limit": K.GAMES_PER_DAY}, status=429)
-        STARTS[who].append(time.time())
+        if not unlimited:
+            STARTS[who].append(time.time())
     nid = own.team_niche(t)["id"] if t else (data.get("niche") if data.get("niche") in NICHES else "realestate")
     nc = niche(nid)
     nums = own.team_nums(t) if t else nc["nums"]
