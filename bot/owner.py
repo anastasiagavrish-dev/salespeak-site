@@ -239,7 +239,7 @@ def report_html(t, ps, total, summary=None):
         s = player_stats(p, total)
         marks = "".join("<span class='m n'>–</span>" if not r else (f"<span class='m bad' title='{_e(CLIENTS[k]['name'])}'>✕</span>" if r.get("lost")
                         else f"<span class='m ok' title='{_e(CLIENTS[k]['name'])}'>✓</span>") for k, r in ((k, p["results"][k] if k < len(p["results"]) else None) for k in pick))
-        rows.append(f"<tr><td><b>{_e(p['alias'])}</b>{'' if p['finished'] else ' <i>(не закончил)</i>'}</td><td>{marks}</td>"
+        rows.append(f"<tr><td><b>{_e(p['alias'])}</b>{'' if p['finished'] else ' <i>(игра не закончена)</i>'}</td><td>{marks}</td>"
                     f"<td>{s['meetings']} из {s['done']}</td><td class='loss'>−{_short(s['loss'], n['cur'])}</td></tr>")
         blocks = []
         for k, r in enumerate(p["results"]):
@@ -249,7 +249,8 @@ def report_html(t, ps, total, summary=None):
             chat = "".join("<p class='muted'>Клиент прочитал сообщение и не ответил. Прошли сутки.</p>" if m['who'] == 'pause'
                            else f"<div class='msg {'c' if m['who'] == 'client' else 'me'}'>{_e(m['text'])}</div>" for m in r.get("log", []))
             steps = "".join(f"<li class='{'ok' if (x or {}).get('ok') else 'bad'}'><b>Шаг {n + 1} · {'хорошо' if (x or {}).get('ok') else 'ошибка'}</b>"
-                            f"<p>{_e((x or {}).get('comment'))}</p>"
+                            + (f"<p class='muted'>Клиент – «{_e(x.get('client'))}»<br>Менеджер – «{_e(x.get('manager'))}»</p>" if (x or {}).get('manager') else "")
+                            + f"<p>{_e((x or {}).get('comment'))}</p>"
                             + (f"<blockquote>{_e((x or {}).get('better'))}</blockquote>" if (x or {}).get('better') else "") + "</li>"
                             for n, x in enumerate(r.get("steps") or []))
             verdict_html = (('<p class="phrase">' + _e(v.get('phrase')) + '</p>') if v.get('phrase') else '') \
@@ -265,7 +266,8 @@ def report_html(t, ps, total, summary=None):
               <details><summary>Показать переписку</summary><div class='chat'>{chat}</div></details>
             </div>""")
         details.append(f"<section><h3>{_e(p['alias'])}</h3>{''.join(blocks) or '<p>Нет законченных переписок.</p>'}</section>")
-    tot_loss = sum(player_stats(p, total)["loss"] for p in ps) / max(1, len(ps))
+    act = [p for p in ps if player_stats(p, total)["done"]]   # средние потери – только по тем, кто прошел хоть одного клиента
+    tot_loss = sum(player_stats(p, total)["loss"] for p in act) / max(1, len(act))
     sm = ""
     if not summary:
         errs = team_errors(ps, 8)
@@ -296,7 +298,7 @@ footer{{margin-top:48px;color:#6e6e73;font-size:14px}}
 </style></head><body><div class="wrap">
 <h1>Отчет по отделу – {_e(t['title'])}</h1>
 <p class="sub">Тренажер «Касса тает» · {_e(n['project_name'])} · менеджеров – {len(ps)} · {time.strftime('%d.%m.%Y')}</p>
-<div class="card"><p>Если отдел отвечает так всем заявкам, при ваших цифрах он недополучает в среднем</p>
+<div class="card"><p>Если отдел отвечает так всем заявкам, при этих цифрах кассы он недополучает в среднем</p>
 <p class="big">−{_short(tot_loss, n['cur'])} в месяц</p><p>Это −{_short(tot_loss * 12, n['cur'])} в год.</p></div>
 {sm}
 <h2>Менеджеры</h2>

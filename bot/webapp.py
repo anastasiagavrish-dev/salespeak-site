@@ -111,7 +111,8 @@ def game_of(s, data):
 
 
 def public_client(c):
-    return dict(name=c["name"], short=c["name"][:2] if c["name"].startswith("Ай") else c["name"][0], sub=c["sub"], first=c["first"])
+    return dict(name=c["name"], short=c["name"][:2] if c["name"].startswith("Ай") else c["name"][0], sub=c["sub"], first=c["first"],
+                source=c.get("source", ""))
 
 
 def public_niche(n):
@@ -165,7 +166,9 @@ async def api_session(req):
     s["traits"] = K.roll_traits(len(s["pick"]), seed=("team:" + t["id"]) if t else None)   # у отдела характеры одинаковые для всех
     if t:
         alias = " ".join(str(data.get("alias") or "").split())[:40] or "Менеджер"
-        uid = user["id"] if user else -abs(hash(who)) % (10 ** 12)
+        # вне Telegram менеджеров различаем по метке браузера, а не по IP – в офисе IP у всех один
+        dev = str(data.get("dev") or "")[:64] or secrets.token_hex(8)
+        uid = user["id"] if user else -(int(hashlib.sha256(dev.encode()).hexdigest()[:12], 16))
         s["alias"], s["pid"] = alias, own.start_player(t["id"], uid, alias)
     SESSIONS[sid] = s
     save_sessions()
@@ -236,12 +239,12 @@ async def api_review(req):
     save_sessions()
     if s["pid"]:
         try:
-            own.save_result(s["pid"], g.i, dict(lost=outcome != "meeting", v=v, steps=steps or [], log=g.log))
+            own.save_result(s["pid"], g.i, dict(lost=outcome != "meeting", v=v, steps=merged or [], log=g.log))
         except Exception as e:
             log.warning("save_result: %s", e)
         if not s.get("start_sent"):
             s["start_sent"] = True
-            await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> начал проверку, отдел «{{team}}». Первый клиент – "
+            await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> проходит проверку, отдел «{{team}}». Первый клиент – "
                                   f"{niche(s['niche'])['win_done'] if outcome == 'meeting' else 'слит'}. Итог пришлю, когда закончит.")
     return web.json_response({"v": v, "steps": merged})
 
@@ -264,6 +267,23 @@ def score(s):
     return done, lost, (lost / len(done) if done else 0) * tot
 
 
+async def partial_later(sid, calls, delay=1800):
+    await asyncio.sleep(delay)
+    s = SESSIONS.get(sid)
+    if not s:
+        return
+    s["partial_wait"] = False
+    if s.get("finished") or s.get("partial_sent") or s["calls"] != calls:
+        return
+    done, lost, loss = score(s)
+    n = niche(s["niche"])
+    s["partial_sent"] = True
+    save_sessions()
+    await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> вышел из игры, не дойдя до конца, отдел «{{team}}».\n"
+                          f"Пока пройдено клиентов – {len(done)} из {len(s['pick'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss, n['cur'])}</b> в месяц. "
+                          "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
+
+
 async def api_finish(req):
     # sendBeacon присылает text/plain – читаем тело как JSON вручную
     try:
@@ -277,12 +297,10 @@ async def api_finish(req):
     n = niche(s["niche"])
     if data.get("partial"):
         # менеджер закрыл игру, не дойдя до конца
-        if s["team"] and done and not s.get("partial_sent"):
-            s["partial_sent"] = True
-            save_sessions()
-            await notify_owner(s, f"👤 <b>{K.esc(s['alias'])}</b> закрыл или свернул игру, не дойдя до конца, отдел «{{team}}».\n"
-                                  f"Пока пройдено клиентов – {len(done)} из {len(s['pick'])}, {n['wins']} – {len(done) - lost}, потери – около <b>{K.short(loss, n['cur'])}</b> в месяц. "
-                                  "Все пройденное уже есть в отчете. Если вернется и закончит, пришлю итог.")
+        # свернуть приложение – еще не уйти: сообщаем собственнику, только если 30 минут не было ни одного действия
+        if s["team"] and done and not s.get("partial_sent") and not s.get("partial_wait"):
+            s["partial_wait"] = True
+            asyncio.create_task(partial_later(str(data.get("sid", "")), s["calls"]))
         return web.json_response({"ok": True})
     s["finished"] = True
     save_sessions()
