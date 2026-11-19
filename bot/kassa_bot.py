@@ -67,8 +67,8 @@ def esc(s):
 
 
 # ---------------- нейросеть ----------------
-async def llm(prompt, model, temperature=0.6, max_tokens=1500):
-    async with httpx.AsyncClient(timeout=120) as c:
+async def llm(prompt, model, temperature=0.6, max_tokens=1500, timeout=90):
+    async with httpx.AsyncClient(timeout=timeout) as c:
         r = await c.post(f"{LLM_BASE}/chat/completions",
                          headers={"Authorization": f"Bearer {LLM_KEY}"},
                          json={"model": model, "temperature": temperature, "max_tokens": max_tokens,
@@ -106,9 +106,12 @@ def parse_json(text, want):
 
 async def llm_json(prompt, want, model, temperature=0.6, max_tokens=1500, tries=2):
     last = None
-    for k in range(tries):
+    smart = model != MODEL_FAST
+    # сильная модель – одна попытка с ограничением по времени, дальше сразу быстрая,
+    # чтобы разбор успевал прийти, пока страница ждет ответа
+    for k in range(1 if smart else tries):
         try:
-            v = parse_json(await llm(prompt, model, temperature, max_tokens), want)
+            v = parse_json(await llm(prompt, model, temperature, max_tokens, timeout=70 if smart else 60), want)
             if v is not None:
                 return v
             last = ValueError("ответ не в формате JSON")
@@ -119,7 +122,7 @@ async def llm_json(prompt, want, model, temperature=0.6, max_tokens=1500, tries=
     if model != MODEL_FAST:
         # запасной вариант – быстрая модель, чтобы разбор все равно пришел
         try:
-            v = parse_json(await llm(prompt, MODEL_FAST, temperature, max_tokens), want)
+            v = parse_json(await llm(prompt, MODEL_FAST, temperature, min(max_tokens, 4000), timeout=80), want)
             if v is not None:
                 log.warning("LLM: %s не ответила, разбор сделала %s", model, MODEL_FAST)
                 return v
