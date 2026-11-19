@@ -102,7 +102,13 @@ REALESTATE = dict(
 from game_realestate_ru import build as _build_ru  # noqa: E402
 REALESTATE_RU = _build_ru()
 
-NICHES = {"realestate": REALESTATE, "realestate_ru": REALESTATE_RU, "peptides": PEPTIDES}
+from game_niches import build as _build_niche  # noqa: E402
+
+NICHES = {"realestate": REALESTATE, "realestate_ru": REALESTATE_RU}
+for _kind in ("dental", "spa", "school"):
+    for _c in ("kz", "ru"):
+        NICHES[f"{_kind}_{_c}"] = _build_niche(_kind, _c, REALESTATE["page"])
+NICHES["peptides"] = PEPTIDES
 COUNTRIES = {"kz": "Казахстан", "ru": "Россия"}
 
 
