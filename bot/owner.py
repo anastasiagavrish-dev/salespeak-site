@@ -194,16 +194,25 @@ def report_html(t, ps, total, summary=None):
                             f"<p>{_e((x or {}).get('comment'))}</p>"
                             + (f"<blockquote>{_e((x or {}).get('better'))}</blockquote>" if (x or {}).get('better') else "") + "</li>"
                             for n, x in enumerate(r.get("steps") or []))
-            blocks.append(f"""<details><summary>{_e(CLIENTS[k]['name'])} – {'встреча' if not r.get('lost') else 'слит'}{(' · этап «' + _e(v.get('stage')) + '»') if v.get('stage') else ''}</summary>
-              {('<p class="phrase">' + _e(v.get('phrase')) + '</p>') if v.get('phrase') else ''}
-              {('<p>' + _e(v.get('summary')) + '</p>') if v.get('summary') else ''}
-              {('<p><b>Где слили</b></p><ul>' + ''.join('<li>' + _e(x) + '</li>' for x in v.get('errors') or []) + '</ul>') if v.get('errors') else ''}
-              <div class='chat'>{chat}</div>
-              {('<p><b>Разбор по шагам</b></p><ol class="steps">' + steps + '</ol>') if steps else ''}
-            </details>""")
+            verdict_html = (('<p class="phrase">' + _e(v.get('phrase')) + '</p>') if v.get('phrase') else '') \
+                + (('<p>' + _e(v.get('summary')) + '</p>') if v.get('summary') else '') \
+                + (('<p><b>Что получилось</b></p><ul>' + ''.join('<li>' + _e(x) + '</li>' for x in v.get('good') or []) + '</ul>') if v.get('good') else '') \
+                + (('<p><b>Где слили</b></p><ul>' + ''.join('<li>' + _e(x) + '</li>' for x in v.get('errors') or []) + '</ul>') if v.get('errors') else '') \
+                + (('<p><b>Что не узнали о клиенте.</b> ' + _e(v.get('hidden')) + '</p>') if v.get('hidden') else '')
+            if not verdict_html:
+                verdict_html = "<p class='muted'>Разбор этой переписки не загрузился – нейросеть не ответила. Он появится при следующем запросе отчета.</p>"
+            blocks.append(f"""<div class='client'><h4>{_e(CLIENTS[k]['name'])} – <span class='{'okc' if not r.get('lost') else 'badc'}'>{'встреча' if not r.get('lost') else 'слит'}</span>{(' · этап «' + _e(v.get('stage')) + '»') if v.get('stage') else ''}</h4>
+              {verdict_html}
+              {('<p><b>Разбор по шагам – как надо было ответить</b></p><ol class="steps">' + steps + '</ol>') if steps else ''}
+              <details><summary>Показать переписку</summary><div class='chat'>{chat}</div></details>
+            </div>""")
         details.append(f"<section><h3>{_e(p['alias'])}</h3>{''.join(blocks) or '<p>Нет законченных переписок.</p>'}</section>")
     tot_loss = sum(player_stats(p, total)["loss"] for p in ps) / max(1, len(ps))
     sm = ""
+    if not summary:
+        errs = team_errors(ps, 8)
+        if errs:
+            summary = {"headline": "Где отдел теряет клиентов", "patterns": errs}
     if summary:
         sm = (f"<div class='card'><p class='phrase'>{_e(summary.get('headline'))}</p>"
               + ("<p><b>Ошибки, которые повторяются в отделе</b></p><ul>" + "".join(f"<li>{_e(x)}</li>" for x in summary.get("patterns") or []) + "</ul>" if summary.get("patterns") else "")
@@ -222,7 +231,8 @@ th{{font-size:13px;color:#6e6e73;font-weight:600}} .loss{{color:#c0392b;font-wei
 details{{background:#fff;border-radius:14px;padding:14px 18px;margin:10px 0}} summary{{cursor:pointer;font-weight:600}}
 .phrase{{font-weight:700;font-size:18px}} .chat{{display:grid;gap:6px;margin:12px 0}}
 .msg{{padding:8px 12px;border-radius:12px;max-width:80%;white-space:pre-wrap}} .msg.c{{background:#f1f1f1}} .msg.me{{background:#dcf3d6;justify-self:end}}
-.steps li{{margin:10px 0}} .steps li.bad b{{color:#c0392b}} .steps li.ok b{{color:#1e7b3a}}
+.steps li{{margin:10px 0}} .client{{background:#fff;border-radius:14px;padding:16px 20px;margin:12px 0}} .client h4{{margin:0 0 8px;font-size:17px}}
+.okc{{color:#1e7b3a}} .badc{{color:#c0392b}} .muted{{color:#6e6e73}} details summary{{font-weight:500;color:#4B3FE1}} .steps li.bad b{{color:#c0392b}} .steps li.ok b{{color:#1e7b3a}}
 blockquote{{margin:6px 0;padding:8px 12px;border-left:3px solid #1e7b3a;background:#f3faf1;border-radius:0 8px 8px 0}}
 footer{{margin-top:48px;color:#6e6e73;font-size:14px}}
 </style></head><body><div class="wrap">

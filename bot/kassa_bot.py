@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import sys
+from types import SimpleNamespace
 import time
 from collections import defaultdict
 
@@ -73,8 +74,14 @@ async def llm(prompt, model, temperature=0.6, max_tokens=1500):
                          json={"model": model, "temperature": temperature, "max_tokens": max_tokens,
                                "response_format": {"type": "json_object"},
                                "messages": [{"role": "user", "content": prompt}]})
+        if r.status_code >= 400:
+            log.warning("LLM %s %s: %s", model, r.status_code, r.text[:300])
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"] or ""
+        msg = r.json()["choices"][0]
+        text = msg["message"].get("content") or ""
+        if not text.strip():
+            log.warning("LLM %s: пустой ответ, finish_reason=%s", model, msg.get("finish_reason"))
+        return text
 
 
 def parse_json(text, want):
@@ -109,6 +116,16 @@ async def llm_json(prompt, want, model, temperature=0.6, max_tokens=1500, tries=
             last = e
             log.warning("LLM: %s", e)
         await asyncio.sleep(1.5)
+    if model != MODEL_FAST:
+        # запасной вариант – быстрая модель, чтобы разбор все равно пришел
+        try:
+            v = parse_json(await llm(prompt, MODEL_FAST, temperature, max_tokens), want)
+            if v is not None:
+                log.warning("LLM: %s не ответила, разбор сделала %s", model, MODEL_FAST)
+                return v
+        except Exception as e:
+            last = e
+            log.warning("LLM fallback: %s", e)
     raise last or RuntimeError("нет ответа")
 
 
@@ -325,8 +342,8 @@ async def close_client(bot, chat_id, g, outcome):
     stop = asyncio.Event()
     tl = asyncio.create_task(typing_loop(bot, chat_id, stop))
     turns = manager_turns(g.log)
-    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=1200))
-    st = asyncio.create_task(llm_json(steps_prompt(g, turns), dict, MODEL_SMART, temperature=0.4, max_tokens=2500)) if turns else None
+    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=2500))
+    st = asyncio.create_task(llm_json(steps_prompt(g, turns), dict, MODEL_SMART, temperature=0.4, max_tokens=5000)) if turns else None
     v = s = None
     try:
         v = await vt
@@ -471,6 +488,41 @@ async def owner_menu(m_or_q, uid):
     await msg.answer("<b>Ваши отделы</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
 
+async def review_one(g, outcome):
+    turns = manager_turns(g.log)
+    v = steps = None
+    vt = asyncio.create_task(llm_json(verdict_prompt(g, outcome), dict, MODEL_SMART, temperature=0.4, max_tokens=2500))
+    st = asyncio.create_task(llm_json(steps_prompt(g, turns), dict, MODEL_SMART, temperature=0.4, max_tokens=5000)) if turns else None
+    try:
+        v = await vt
+    except Exception as e:
+        log.warning("verdict: %s", e)
+    try:
+        steps = (await st).get("steps", []) if st else []
+    except Exception as e:
+        log.warning("steps: %s", e)
+    return v, steps
+
+
+async def fill_missing_reviews(ps, nums):
+    """Если разбор переписки не сохранился (сбой нейросети), делаем его заново перед отчетом."""
+    sem = asyncio.Semaphore(3)
+
+    async def one(p, k, r):
+        async with sem:
+            g = SimpleNamespace(i=k, log=r.get("log") or [], turns=len(manager_turns(r.get("log") or [])), nums=nums)
+            v, steps = await review_one(g, "lost" if r.get("lost") else "meeting")
+            if v or steps:
+                r["v"] = r.get("v") or v
+                r["steps"] = r.get("steps") or steps or []
+                own.save_result(p["id"], k, r)
+
+    jobs = [one(p, k, r) for p in ps for k, r in enumerate(p["results"])
+            if r and r.get("log") and (not r.get("v") or not r.get("steps"))]
+    if jobs:
+        await asyncio.gather(*jobs, return_exceptions=True)
+
+
 async def send_report(bot, chat_id, tid, uid):
     t = own.team(tid)
     if not t or t["owner_id"] != uid:
@@ -483,9 +535,10 @@ async def send_report(bot, chat_id, tid, uid):
         return
     tot = till(own.team_nums(t))["total"]
     await bot.send_message(chat_id, "<i>Анастасия собирает отчет по отделу… это занимает до минуты</i>")
+    await fill_missing_reviews(ps, own.team_nums(t))
     summary = None
     try:
-        summary = await llm_json(own.team_summary_prompt(t, ps, STYLE, RULES), dict, MODEL_SMART, temperature=0.4, max_tokens=1200)
+        summary = await llm_json(own.team_summary_prompt(t, ps, STYLE, RULES), dict, MODEL_SMART, temperature=0.4, max_tokens=2500)
     except Exception as e:
         log.warning("team summary: %s", e)
     lines = [f"📊 <b>Отчет по отделу «{esc(t['title'])}»</b>", f"Менеджеров – {len(ps)}, закончили – {sum(1 for p in ps if p['finished'])}"]
