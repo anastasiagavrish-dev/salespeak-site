@@ -267,6 +267,16 @@ def score(s):
     return done, lost, (lost / len(done) if done else 0) * tot
 
 
+async def api_ping(req):
+    """Жива ли игра на сервере – страница восстанавливает переписку после перезагрузки или сворачивания."""
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    s = SESSIONS.get(str(data.get("sid", "")))
+    return web.json_response({"ok": bool(s and not s.get("finished"))})
+
+
 async def partial_later(sid, calls, delay=1800):
     await asyncio.sleep(delay)
     s = SESSIONS.get(sid)
@@ -332,6 +342,7 @@ async def start(bot, kmod):
     app.router.add_post("/api/client", api_client)
     app.router.add_post("/api/review", api_review)
     app.router.add_post("/api/finish", api_finish)
+    app.router.add_post("/api/ping", api_ping)
     app.router.add_static("/static/", WEB_DIR)
     runner = web.AppRunner(app)
     await runner.setup()

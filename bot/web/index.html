@@ -289,7 +289,7 @@ function openClient(i){
   $('msgs').innerHTML = ''; bubble('sys', `Клиент ${i+1} из ${CLIENTS.length}. ${c.source || N.source || 'Заявка пришла с рекламы в Instagram.'}`);
   bubble('them', c.first);
   $('verdictBox').hidden = true; $('finishClient').hidden = false;
-  setInput(true); turns(); renderTill();
+  setInput(true); turns(); renderTill(); saveGame();
   $('chat').scrollIntoView({behavior:'smooth', block:'start'});
 }
 function setInput(on){ $('txt').disabled=!on; $('send').disabled=!on; $('clip').disabled=!on; if(!on) $('attachPanel').hidden=true; if(on && !TG) $('txt').focus(); }
@@ -329,12 +329,12 @@ async function send(e){
   const text = $('txt').value.trim();
   if (state.wrap){   // клиент уже согласился – менеджер дописывает ссылку и следующие шаги, клиент не отвечает
     if(!text) return;
-    $('txt').value=''; bubble('me', text); state.log.push({who:'manager', text}); setInput(true); return;
+    $('txt').value=''; bubble('me', text); state.log.push({who:'manager', text}); saveGame(); setInput(true); return;
   }
   const fileWaiting = state.log.length && state.log[state.log.length-1].who==='manager';
   if(!text && !fileWaiting) return;
   if(text){ $('txt').value=''; bubble('me', text); state.log.push({who:'manager', text}); }
-  state.turns++; turns();
+  state.turns++; turns(); saveGame();
   busy = true; setInput(false);
   const typing = bubble('them typing', `${CLIENTS[state.i].name} печатает…`);
   try{
@@ -342,13 +342,13 @@ async function send(e){
     typing.remove();
     const out = String((r && r.outcome) || '').toLowerCase();
     if (out.includes('silent')){   // клиент пропал, как в жизни – менеджер может написать ему еще раз
-      busy = false; state.log.push({who:'pause', text:''});
+      busy = false; state.log.push({who:'pause', text:''}); saveGame();
       bubble('sys', 'Клиент прочитал сообщение и не ответил. Прошли сутки.');
       if (state.turns>=MAX_TURNS) await closeClient('lost'); else setInput(true);
       return;
     }
     const reply = (r && r.reply) ? String(r.reply) : '…';
-    if (reply && reply !== '…' || !out.includes('lost')) { bubble('them', reply); state.log.push({who:'client', text:reply}); }
+    if (reply && reply !== '…' || !out.includes('lost')) { bubble('them', reply); state.log.push({who:'client', text:reply}); saveGame(); }
     busy = false;
     if (out.includes('meet')) startWrap();
     else if (out.includes('lost') || state.turns>=MAX_TURNS){ await closeClient('lost'); }
@@ -363,7 +363,7 @@ async function send(e){
 
 // Клиент согласился: даем менеджеру дописать завершающие сообщения – ссылку, подтверждение, что будет дальше
 function startWrap(){
-  state.wrap = true;
+  state.wrap = true; saveGame();
   bubble('sys', `Клиент согласен ✅ Допишите то, что нужно, – ссылку, подтверждение и следующие шаги, а потом нажмите «Готово – получить разбор».`);
   $('finishClient').textContent = 'Готово – получить разбор'; $('finishClient').hidden = false;
   if (TG) try { TG.HapticFeedback.notificationOccurred('success'); } catch(e){}
@@ -375,14 +375,14 @@ async function closeClient(outcome){
   state.outcome = outcome; setInput(false); $('finishClient').hidden = true;
   bubble('sys', outcome==='meeting' ? N.win_sys : 'Клиент ушел. Касса теряет пятую часть.');
   const share = till().total/CLIENTS.length;
-  state.results[state.i] = {lost: outcome!=='meeting'}; renderTill(); $('finishGame').hidden = !!teamInfo;   // в отделе итог – только после всех клиентов
+  state.results[state.i] = {lost: outcome!=='meeting'}; renderTill(); saveGame(); $('finishGame').hidden = !!teamInfo;   // в отделе итог – только после всех клиентов
   if (outcome!=='meeting') bubble('sys', `−${short(share)} из кассы`);
   if (TG) try { TG.HapticFeedback.notificationOccurred(outcome==='meeting'?'success':'error'); } catch(e){}
   $('verdictBox').hidden=false;
   await renderReview(outcome, share);
 }
 
-async function renderReview(outcome, share){
+async function renderReview(outcome, share, cached){
   const box = $('verdictBox'); const i = state.i; const c = CLIENTS[i]; const logCopy = state.log.slice();
   const head = outcome==='meeting' ? `<span class="pill ok">${esc(N.win)}</span>` : `<span class="pill bad">слит · −${short(share)}</span>`;
   box.innerHTML = `<div class="row"><p class="label" style="margin:0">Разбор · ${c.name}</p>${head}</div>
@@ -396,8 +396,8 @@ async function renderReview(outcome, share){
   b.onclick = () => { last ? finale() : openClient(i+1); };
   $('vNext').append(b);
   try{
-    const r = await withRetry(() => api('/api/review', {sid, i, log:logCopy, turns:state.turns, outcome}));
-    const v = r.v; state.results[i].v = v;
+    const r = cached ? {v: cached.v, steps: cached.steps} : await withRetry(() => api('/api/review', {sid, i, log:logCopy, turns:state.turns, outcome}));
+    const v = r.v; state.results[i] = Object.assign(state.results[i] || {lost: outcome!=='meeting'}, {v, steps: r.steps}); saveGame();
     $('vMain').innerHTML = v ? `${v.stage?`<p class="note">Дошли до этапа «${esc(v.stage)}»</p>`:''}
       <p class="big">${esc(v.phrase||'')}</p>
       <p>${esc(v.summary||'')}</p>
@@ -427,7 +427,7 @@ function finale(){
   const allErr = [...new Set(done.flatMap(r=>(r.v&&r.v.errors)||[]))].slice(0,6);
   const box = $('finalBox'); box.hidden=false;
   setInput(false); $('finishClient').hidden=true; $('finishGame').hidden=true;
-  state.finished = true;
+  state.finished = true; clearSave();
   api('/api/finish', {sid}).catch(()=>{});
   const teamNote = teamInfo ? `<p><b>Результат и разборы отправлены руководителю.</b> Спасибо, что прошли проверку!</p>` : '';
   box.innerHTML = `<p class="label">${teamInfo ? 'Ваш итог' : 'Итог по отделу'}</p>
@@ -467,6 +467,47 @@ function weakSpot(done){
   return `<div class="better"><p style="margin:0 0 6px"><b>${w.t}.</b> ${w.d}</p><button id="weakBtn" class="ghost" type="button">${w.b}</button></div>`;
 }
 
+// ---------- игра не теряется при сворачивании и перезагрузке ----------
+const SAVE_KEY = 'kt_game';
+function saveGame(){
+  if (!sid || !state || !N) return;
+  try{
+    if (state.finished){ localStorage.removeItem(SAVE_KEY); return; }
+    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1, ts:Date.now(), sid, niche:N.id, team:TEAM, alias, clients:CLIENTS, nums:nums(),
+      state:{i:state.i, results:state.results, log:state.log, turns:state.turns, wrap:!!state.wrap, closing:!!state.closing, outcome:state.outcome||''}}));
+  }catch(e){}
+}
+function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+async function restoreGame(){
+  let g = null;
+  try{ g = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(e){}
+  if (!g || g.v!==1 || !g.sid || !N || g.niche!==N.id || (g.team||'')!==(TEAM||'') || Date.now()-g.ts > 12*3600*1000) return false;
+  try{ const r = await api('/api/ping', {sid:g.sid}); if (!r || !r.ok){ clearSave(); return false; } }catch(e){ return false; }
+  sid = g.sid; CLIENTS = g.clients; alias = g.alias || ''; setNums(g.nums);
+  state = Object.assign({finished:false}, g.state);
+  $('start').textContent = 'Начать заново'; $('finalBox').hidden = true; $('teamBox').hidden = true; $('picker').hidden = true; $('gameGrid').hidden = false;
+  $('mcash').hidden = false; try{ history.replaceState(null, '', TEAM ? location.search : '?niche=' + encodeURIComponent(N.id)); }catch(e){}
+  if (teamInfo){ $('start').hidden = true; }
+  const i = state.i, c = CLIENTS[i];
+  $('hAv').textContent = c.short; $('hName').textContent = c.name; $('hSub').textContent = 'пишет вам в мессенджер';
+  $('msgs').innerHTML = ''; bubble('sys', `Клиент ${i+1} из ${CLIENTS.length}. ${c.source || N.source || 'Заявка пришла с рекламы в Instagram.'}`);
+  state.log.forEach(m => m.who==='pause' ? bubble('sys', 'Клиент прочитал сообщение и не ответил. Прошли сутки.') : bubble(m.who==='client' ? 'them' : 'me', m.text));
+  bubble('sys', 'Игра восстановлена – продолжайте с того же места.');
+  turns(); renderTill();
+  if (state.closing){
+    const res = state.results[i] || {lost: state.outcome!=='meeting'};
+    $('finishClient').hidden = true; $('finishGame').hidden = !!teamInfo; $('verdictBox').hidden = false; setInput(false);
+    await renderReview(state.outcome || (res.lost ? 'lost' : 'meeting'), till().total/CLIENTS.length, res.v || res.steps ? res : null);
+  } else {
+    $('verdictBox').hidden = true; $('finishClient').hidden = false;
+    if (state.wrap){ $('finishClient').textContent = 'Готово – получить разбор'; bubble('sys', 'Клиент согласен ✅ Допишите то, что нужно, и нажмите «Готово – получить разбор».'); }
+    else $('finishClient').textContent = 'Клиент ушел – закончить переписку';
+    $('finishGame').hidden = !!teamInfo || !doneCount();
+    setInput(true);
+  }
+  return true;
+}
+
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
 
 async function startGame(){
@@ -485,6 +526,7 @@ async function startGame(){
   }
   $('start').disabled = false;
   state = {i:0, results:Array(CLIENTS.length).fill(null), log:[], turns:0};
+  clearSave();
   $('start').textContent = 'Начать заново'; $('finalBox').hidden=true; $('finishGame').hidden=true;
   if (teamInfo){ $('start').hidden = true; ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true); }
   openClient(0);
@@ -565,9 +607,12 @@ async function init(){
       $('teamTitle').textContent = t.title; $('teamBox').hidden = false; $('start').hidden = true;
       ['budget','cpl','check','conv'].forEach(id=>$(id).readOnly=true);
       const nm = TG && TG.initDataUnsafe && TG.initDataUnsafe.user && TG.initDataUnsafe.user.first_name; if (nm) $('alias').value = nm;
+      await restoreGame();
     } else {
       const want = params.get('niche') || (TG && TG.initDataUnsafe && (TG.initDataUnsafe.start_param||'').startsWith('n_') ? TG.initDataUnsafe.start_param.slice(2) : '');
-      if (want) await loadNiche(want); else await showPicker();
+      let saved = null; try{ saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(e){}
+      if (!want && saved && !saved.team && saved.niche) { try{ await loadNiche(saved.niche); if (await restoreGame()) return; }catch(e){} }
+      if (want) { await loadNiche(want); await restoreGame(); } else await showPicker();
     }
   }catch(e){ showErr('Не получилось открыть игру – сбой связи. Обновите страницу.'); return; }
   finally { $('start').disabled = false; }
