@@ -80,9 +80,9 @@ def client_ip(req):
 def clean_log(raw):
     out = []
     for m in (raw or [])[:60]:
-        if not isinstance(m, dict) or m.get("who") not in ("client", "manager"):
+        if not isinstance(m, dict) or m.get("who") not in ("client", "manager", "pause"):
             continue
-        out.append(dict(who=m["who"], text=str(m.get("text", ""))[:2000]))
+        out.append(dict(who=m["who"], text="" if m["who"] == "pause" else str(m.get("text", ""))[:2000]))
     return out
 
 
@@ -102,8 +102,9 @@ def game_of(s, data):
     if not 0 <= pos < len(s["pick"]):
         raise web.HTTPBadRequest(text=json.dumps({"error": "client"}), content_type="application/json")
     i = s["pick"][pos]
+    tr = (s.get("traits") or [None] * len(s["pick"]))[pos] or {}
     g = SimpleNamespace(i=i, log=clean_log(data.get("log")), turns=min(n["max_turns"], max(1, int(data.get("turns", 1)))), nums=s["nums"],
-                        niche=n["id"])
+                        niche=n["id"], temper=tr.get("temper"), ghost=bool(tr.get("ghost")))
     if not g.log or g.log[0]["who"] != "client":
         g.log.insert(0, dict(who="client", text=n["clients"][i]["first"]))
     return g
@@ -161,6 +162,7 @@ async def api_session(req):
     sid = secrets.token_urlsafe(18)
     s = dict(created=time.time(), who=who, user=user, team=t["id"] if t else None, pid=None, alias="", nums=dict(nums), calls=0,
              niche=nid, results=[None] * len(nc["clients"]), pick=own.team_pick(t) if t else own.pick_clients(nc))
+    s["traits"] = K.roll_traits(len(s["pick"]), seed=("team:" + t["id"]) if t else None)   # у отдела характеры одинаковые для всех
     if t:
         alias = " ".join(str(data.get("alias") or "").split())[:40] or "Менеджер"
         uid = user["id"] if user else -abs(hash(who)) % (10 ** 12)
@@ -199,7 +201,17 @@ async def api_client(req):
     except Exception as e:
         log.warning("client: %s", e)
         return web.json_response({"error": "llm"}, status=502)
-    return web.json_response({"reply": str(r.get("reply") or "…").strip(), "outcome": str(r.get("outcome") or "continue").lower()})
+    outcome = str(r.get("outcome") or "continue").lower()
+    reply = str(r.get("reply") or "").strip()
+    if "silent" in outcome:
+        pauses = sum(1 for m in g.log if m["who"] == "pause")
+        if not g.ghost or g.turns < 3:          # пропадать можно только «призракам» и не в самом начале
+            outcome = "continue"
+        elif pauses >= 2:                       # уже дважды пропадал – дальше уходит совсем
+            outcome, reply = "lost", ""
+        else:
+            return web.json_response({"reply": "", "outcome": "silent"})
+    return web.json_response({"reply": reply or "…", "outcome": outcome})
 
 
 async def api_review(req):

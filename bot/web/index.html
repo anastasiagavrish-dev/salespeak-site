@@ -335,9 +335,15 @@ async function send(e){
   try{
     const r = await withRetry(() => api('/api/client', {sid, i:state.i, log:state.log, turns:state.turns}));
     typing.remove();
-    const reply = (r && r.reply) ? String(r.reply) : '…';
-    bubble('them', reply); state.log.push({who:'client', text:reply});
     const out = String((r && r.outcome) || '').toLowerCase();
+    if (out.includes('silent')){   // клиент пропал, как в жизни – менеджер может написать ему еще раз
+      busy = false; state.log.push({who:'pause', text:''});
+      bubble('sys', 'Клиент прочитал сообщение и не ответил. Прошли сутки.');
+      if (state.turns>=MAX_TURNS) await closeClient('lost'); else setInput(true);
+      return;
+    }
+    const reply = (r && r.reply) ? String(r.reply) : '…';
+    if (reply && reply !== '…' || !out.includes('lost')) { bubble('them', reply); state.log.push({who:'client', text:reply}); }
     busy = false;
     if (out.includes('meet')) startWrap();
     else if (out.includes('lost') || state.turns>=MAX_TURNS){ await closeClient('lost'); }

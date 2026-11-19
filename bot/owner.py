@@ -246,7 +246,8 @@ def report_html(t, ps, total, summary=None):
             if not r:
                 continue
             v = r.get("v") or {}
-            chat = "".join(f"<div class='msg {'c' if m['who'] == 'client' else 'me'}'>{_e(m['text'])}</div>" for m in r.get("log", []))
+            chat = "".join("<p class='muted'>Клиент прочитал сообщение и не ответил. Прошли сутки.</p>" if m['who'] == 'pause'
+                           else f"<div class='msg {'c' if m['who'] == 'client' else 'me'}'>{_e(m['text'])}</div>" for m in r.get("log", []))
             steps = "".join(f"<li class='{'ok' if (x or {}).get('ok') else 'bad'}'><b>Шаг {n + 1} · {'хорошо' if (x or {}).get('ok') else 'ошибка'}</b>"
                             f"<p>{_e((x or {}).get('comment'))}</p>"
                             + (f"<blockquote>{_e((x or {}).get('better'))}</blockquote>" if (x or {}).get('better') else "") + "</li>"
