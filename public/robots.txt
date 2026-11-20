@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: /admin
 Disallow: /api/
-Sitemap: https://salespeak.ru/sitemap.xml
+Sitemap: https://a-gavrish.com/sitemap.xml

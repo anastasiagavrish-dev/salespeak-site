@@ -134,6 +134,8 @@ def layout(path, title, desc, body, ld=None, noindex=False):
     dest = os.path.join(OUT, path, "index.html") if path.endswith("/") or path == "" else os.path.join(OUT, path)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     open(dest, "w").write(page)
+    if not noindex:
+        SITEMAP.append(path)
 
 
 def _external_blank(m):
@@ -146,7 +148,6 @@ def _external_blank(m):
     if h.startswith(("http://", "https://", "//")) and not h.startswith(SITE):
         return tag[:-1] + ' target="_blank" rel="noopener">'
     return tag
-    SITEMAP.append(path)
 
 
 SITEMAP = []
@@ -444,7 +445,6 @@ def not_found():
     body = f"""<section class="page-hero"><div class="wrap"><p class="eyebrow">Ошибка 404</p><h1>Такой страницы нет</h1><p class="lead">Возможно, она переехала, пока мы обновляли сайт.</p>
 <div class="hero-cta"><a class="btn" href="{u('')}">На главную</a><a class="more" href="{u('cases/')}">Посмотреть кейсы</a></div></div></section>"""
     layout("404.html", "Страница не найдена", "Страница не найдена.", body, noindex=True)
-    SITEMAP.remove("404.html")
 
 
 # ---------------- assets ----------------
@@ -472,9 +472,18 @@ def build_assets():
 
 
 def main():
+    # Сборка идет во временную папку и подменяет готовый сайт только целиком и после проверки.
+    # Если сборка упадет, на сервере останется предыдущая рабочая версия со всеми файлами.
+    global OUT
+    final = OUT
+    OUT = final + ".new"
     if os.path.exists(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT)
+    build(final)
+
+
+def build(final):
     build_assets()
     if not PREVIEW:
         shutil.copytree(os.path.join(ROOT, 'php'), OUT, dirs_exist_ok=True)
@@ -492,7 +501,33 @@ def main():
         import datetime
         open(os.path.join(OUT, "build.txt"), "w").write(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
         open(os.path.join(OUT, "robots.txt"), "w").write(f"User-agent: *\nDisallow: /admin\nDisallow: /api/\nSitemap: {SITE}/sitemap.xml\n")
-    print("pages:", len(SITEMAP), "→", OUT)
+        check(OUT)
+    old = final + ".old"
+    if os.path.exists(old):
+        shutil.rmtree(old)
+    if os.path.exists(final):
+        os.rename(final, old)
+    os.rename(OUT, final)
+    if os.path.exists(old):
+        shutil.rmtree(old)
+    print("pages:", len(SITEMAP), "→", final)
+
+
+def check(out):
+    """Перед выкладкой: служебные файлы на месте, в карте сайта все страницы и нет закрытых разделов."""
+    must = ["index.html", "404.html", "sitemap.xml", "robots.txt", "uslugi/skripty/index.html", "uslugi/treningi/index.html"]
+    missing = [f for f in must if not os.path.isfile(os.path.join(out, f))]
+    if missing:
+        sys.exit("Сборка остановлена, нет файлов: " + ", ".join(missing))
+    pages = sorted(os.path.relpath(os.path.join(d, "index.html"), out).replace("index.html", "").replace(os.sep, "/")
+                   for d, _, fs in os.walk(out) if "index.html" in fs)
+    pages = [p.replace("./", "") for p in pages]
+    lost = [p for p in pages if p not in SITEMAP]
+    if lost or not SITEMAP:
+        sys.exit("Сборка остановлена, страниц нет в sitemap.xml: " + (", ".join(lost) or "карта пустая"))
+    bad = [p for p in SITEMAP if p.startswith(("admin", "api", "_app", "assets"))]
+    if bad:
+        sys.exit("Сборка остановлена, в sitemap.xml попали служебные адреса: " + ", ".join(bad))
 
 
 if __name__ == "__main__":

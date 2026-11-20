@@ -2,12 +2,15 @@ DirectoryIndex index.html index.php
 ErrorDocument 404 /404.html
 Options -Indexes
 AddDefaultCharset utf-8
+AddType application/xml .xml
 
 <IfModule mod_rewrite.c>
 RewriteEngine On
 RewriteCond %{HTTP_HOST} ^(www\.)?salespeak\.ru$ [NC,OR]
 RewriteCond %{HTTP_HOST} ^www\.a-gavrish\.com$ [NC]
 RewriteRule ^(.*)$ https://a-gavrish.com/$1 [R=301,L]
+RewriteRule ^script/?$ https://a-gavrish.com/uslugi/skripty/ [R=301,L]
+RewriteRule ^training/?$ https://a-gavrish.com/uslugi/treningi/ [R=301,L]
 RewriteRule ^(_app|_data)(/|$) - [F,L]
 RewriteRule ^api/lead/?$ api/lead.php [L]
 </IfModule>

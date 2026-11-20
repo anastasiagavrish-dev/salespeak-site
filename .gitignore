@@ -4,3 +4,7 @@ __pycache__/
 .env
 public/_app/setup-token.txt
 public/_data/
+public.new/
+public.old/
+preview.new/
+preview.old/
