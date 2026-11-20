@@ -108,6 +108,8 @@ NICHES = {"realestate": REALESTATE, "realestate_ru": REALESTATE_RU}
 for _kind in ("dental", "spa", "school", "travel", "fitness", "kids", "measure", "b2b", "bankrupt", "courses", "shop", "beauty"):
     for _c in ("kz", "ru"):
         NICHES[f"{_kind}_{_c}"] = _build_niche(_kind, _c, REALESTATE["page"])
+# закрытая ниша для подарочной проверки отдела (защита окон) – только по коду, в общем списке не видна
+NICHES["nets_kz"] = dict(_build_niche("nets", "kz", REALESTATE["page"]), public=False)
 NICHES["peptides"] = PEPTIDES
 COUNTRIES = {"kz": "Казахстан", "ru": "Россия"}
 
