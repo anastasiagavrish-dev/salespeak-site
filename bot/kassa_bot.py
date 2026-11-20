@@ -465,7 +465,7 @@ async def client_turn(bot, chat_id, g):
     stop = asyncio.Event()
     tl = asyncio.create_task(typing_loop(bot, chat_id, stop))
     try:
-        r = await llm_json(client_prompt(g), dict, MODEL_FAST, temperature=0.7, max_tokens=400)
+        r = await llm_json(client_prompt(g), dict, MODEL_FAST, temperature=0.7, max_tokens=1500)
     except Exception as e:
         log.warning("client reply failed: %s", e)
         g.turns -= 1

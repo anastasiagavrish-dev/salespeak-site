@@ -207,7 +207,7 @@ async def api_client(req):
     s = session(req, data)
     g = game_of(s, data)
     try:
-        r = await K.llm_json(K.client_prompt(g), dict, K.MODEL_FAST, temperature=0.7, max_tokens=400)
+        r = await K.llm_json(K.client_prompt(g), dict, K.MODEL_FAST, temperature=0.7, max_tokens=1500)
     except Exception as e:
         log.warning("client: %s", e)
         return web.json_response({"error": "llm"}, status=502)
