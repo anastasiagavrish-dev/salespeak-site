@@ -36,6 +36,11 @@ def db():
         # какие клиенты из ниши достались отделу – у всех менеджеров одни и те же, чтобы сравнивать
         if "pick" not in [r[1] for r in DB.execute("PRAGMA table_info(teams)")]:
             DB.execute("ALTER TABLE teams ADD COLUMN pick TEXT")
+        # срок доступа: у кода – сколько дней, у отдела – до какого момента (пусто – бессрочно)
+        if "days" not in [r[1] for r in DB.execute("PRAGMA table_info(codes)")]:
+            DB.execute("ALTER TABLE codes ADD COLUMN days INT")
+        if "expires" not in [r[1] for r in DB.execute("PRAGMA table_info(teams)")]:
+            DB.execute("ALTER TABLE teams ADD COLUMN expires INT")
         DB.commit()
     return DB
 
@@ -58,9 +63,9 @@ def vip_ok(key):
 
 
 # ---------------- коды доступа ----------------
-def new_code(note="", niche_id="realestate"):
+def new_code(note="", niche_id="realestate", days=None):
     code = "KT-" + _rand(6, "ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
-    db().execute("INSERT INTO codes(code, created, note, niche) VALUES(?,?,?,?)", (code, int(time.time()), note, niche_id))
+    db().execute("INSERT INTO codes(code, created, note, niche, days) VALUES(?,?,?,?,?)", (code, int(time.time()), note, niche_id, days or None))
     db().commit()
     return code
 
@@ -81,6 +86,22 @@ def use_code(code, owner_id):
     return code, ""
 
 
+def set_term(code, days):
+    """Срок для кода: если отдел уже создан – отсчет от сегодня, иначе – от активации. 0 – бессрочно."""
+    code = code.strip().upper()
+    r = db().execute("SELECT * FROM codes WHERE code=?", (code,)).fetchone()
+    if not r:
+        return None
+    ts = db().execute("SELECT id FROM teams WHERE code=?", (code,)).fetchall()
+    if ts:
+        exp = int(time.time()) + days * 86400 if days else None
+        db().execute("UPDATE teams SET expires=? WHERE code=?", (exp, code))
+    else:
+        db().execute("UPDATE codes SET days=? WHERE code=?", (days or None, code))
+    db().commit()
+    return "team" if ts else "code"
+
+
 def code_niche(code):
     r = db().execute("SELECT niche FROM codes WHERE code=?", (code,)).fetchone()
     return (r and r["niche"]) or "realestate"
@@ -89,14 +110,25 @@ def code_niche(code):
 # ---------------- отделы ----------------
 def create_team(owner_id, owner_chat, title, code, nums, niche_id="realestate"):
     tid = _rand(8, string.ascii_lowercase + string.digits)
-    db().execute("INSERT INTO teams(id, owner_id, owner_chat, title, code, nums, created, niche) VALUES(?,?,?,?,?,?,?,?)",
-                 (tid, owner_id, owner_chat, title, code, json.dumps(nums), int(time.time()), niche_id))
+    r = db().execute("SELECT days FROM codes WHERE code=?", (code,)).fetchone()
+    exp = int(time.time()) + r["days"] * 86400 if r and r["days"] else None
+    db().execute("INSERT INTO teams(id, owner_id, owner_chat, title, code, nums, created, niche, expires) VALUES(?,?,?,?,?,?,?,?,?)",
+                 (tid, owner_id, owner_chat, title, code, json.dumps(nums), int(time.time()), niche_id, exp))
     db().commit()
     return tid
 
 
 def team(tid):
     return db().execute("SELECT * FROM teams WHERE id=?", (tid,)).fetchone()
+
+
+def team_expired(t):
+    return bool(t and t["expires"] and time.time() > t["expires"])
+
+
+def team_until(t):
+    """«до 20.02.2027» или пусто, если бессрочно."""
+    return time.strftime("до %d.%m.%Y", time.localtime(t["expires"])) if t and t["expires"] else ""
 
 
 def owner_teams(owner_id):

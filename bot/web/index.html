@@ -520,6 +520,7 @@ async function startGame(){
   }catch(err){
     $('start').disabled = false;
     if (err.code==='daily') showErr(`На сегодня лимит – ${err.data.limit} игры. Возвращайтесь завтра или напишите Анастасии – <b>@${CONTACT}</b>.`);
+    else if (err.code==='expired') showErr('Срок проверки по этой ссылке закончился. Если нужно пройти, напишите руководителю.');
     else if (err.code==='team') showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.');
     else showErr('Не получилось начать игру – сбой связи. Попробуйте еще раз через минуту.');
     return;
@@ -601,7 +602,7 @@ async function init(){
   try{
     if (TEAM){
       const r = await fetch('/api/team?team=' + encodeURIComponent(TEAM)); const t = await r.json();
-      if (t.error){ await loadNiche(''); showErr('Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.'); return; }
+      if (t.error){ await loadNiche(''); showErr(t.error==='expired' ? 'Срок проверки по этой ссылке закончился. Если нужно пройти, напишите руководителю.' : 'Ссылка на проверку отдела устарела. Попросите руководителя прислать новую.'); return; }
       await loadNiche(t.niche);
       teamInfo = t; setNums(t.nums); renderTill();
       $('teamTitle').textContent = t.title; $('teamBox').hidden = false; $('start').hidden = true;

@@ -640,10 +640,12 @@ async def owner_menu(m_or_q, uid):
                          "а вам придет отчет по отделу – кто где сливает клиентов, сколько это стоит в деньгах и что исправить.\n\n"
                          f"Чтобы открыть доступ, пришлите код. Код можно получить у Анастасии – @{CONTACT}")
         return
-    kb = [[InlineKeyboardButton(text=f"📊 {t['title']} – отчет", callback_data=f"r:{t['id']}"),
+    kb = [[InlineKeyboardButton(text=f"📊 {t['title']} – отчет" + (" (срок закончился)" if own.team_expired(t) else ""), callback_data=f"r:{t['id']}"),
            InlineKeyboardButton(text="🔗 Ссылка", callback_data=f"l:{t['id']}")] for t in ts[:8]]
     kb.append([InlineKeyboardButton(text="➕ Новый отдел по коду", callback_data="own_new")])
-    await msg.answer("<b>Ваши отделы</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+    terms = [f"«{esc(t['title'])}» – " + ("срок проверки закончился, отчет остается у вас. Продлить – @" + CONTACT if own.team_expired(t) else "проверка открыта " + own.team_until(t))
+             for t in ts[:8] if t["expires"]]
+    await msg.answer("<b>Ваши отделы</b>" + ("\n\n" + "\n".join(terms) if terms else ""), reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
 
 async def review_one(g, outcome):
@@ -760,6 +762,9 @@ async def cmd_start(m: Message, command: CommandObject):
             return
         if own.player_done(t["id"], uid):
             await m.answer("Вы уже прошли эту проверку – результат у руководителя. Спасибо!")
+            return
+        if own.team_expired(t):
+            await m.answer("Срок проверки по этой ссылке закончился. Если нужно пройти, напишите руководителю.")
             return
         if WEBAPP_URL:
             await m.answer(f"<b>Проверка переписки – {esc(t['title'])}</b>\n\n" + esc(own.team_niche(t)["page"]["team"]),
@@ -910,6 +915,10 @@ async def cb_link(q: CallbackQuery):
     t = own.team(q.data[2:])
     if not t or t["owner_id"] != q.from_user.id:
         return
+    if own.team_expired(t):
+        await q.message.answer(f"Срок проверки для отдела «{esc(t['title'])}» закончился – новые менеджеры по ссылке уже не зайдут. Отчет остается у вас. "
+                               f"Чтобы продлить, напишите Анастасии – @{CONTACT}")
+        return
     link = team_link(await bot_name(q.bot), t["id"])
     await q.message.answer("Это сообщение перешлите менеджерам ↓")
     await q.message.answer(invite_text(t, link), disable_web_page_preview=True)
@@ -919,14 +928,17 @@ async def cb_link(q: CallbackQuery):
 async def cmd_code(m: Message, command: CommandObject):
     if not is_admin(m.from_user):
         return
-    args = (command.args or "").split(maxsplit=1)
-    nid = "realestate"
+    args = (command.args or "").split()
+    nid, days = "realestate", None
     if args and args[0].lower() in NICHES:
         nid = args.pop(0).lower()
-    code = own.new_code(args[0] if args else "", nid)
-    await m.answer(f"Новый код доступа для собственника – ниша «{NICHES[nid]['title']}», {COUNTRIES.get(NICHES[nid].get('country', 'kz'), '')}\n<code>{code}</code>\n\n"
-                   "Он открывает режим «Проверить мой отдел продаж» для одного отдела. После ниши можно дописать пометку, например "
-                   "<code>/code dental_kz Клиника Айгуль</code>.\n"
+    if args and args[0].isdigit():
+        days = int(args.pop(0)) or None
+    code = own.new_code(" ".join(args), nid, days)
+    term = f"Срок – {days} дн. с момента, когда собственник введет код." if days else "Срок – бессрочно."
+    await m.answer(f"Новый код доступа для собственника – ниша «{NICHES[nid]['title']}», {COUNTRIES.get(NICHES[nid].get('country', 'kz'), '')}\n<code>{code}</code>\n{term}\n\n"
+                   "Он открывает режим «Проверить мой отдел продаж» для одного отдела. После ниши можно указать срок в днях и пометку, например "
+                   "<code>/code dental_kz 90 Клиника Айгуль</code>. Поменять срок потом – <code>/term КОД 30</code> (0 – бессрочно).\n"
                    f"Другие ниши: {', '.join(f'/code {k}' for k in NICHES if k != nid)}")
 
 
@@ -949,8 +961,31 @@ async def cmd_codes(m: Message):
     if not rows:
         await m.answer("Кодов пока нет. Создать – /code")
         return
+    def term(r):
+        t = own.db().execute("SELECT * FROM teams WHERE code=? ORDER BY created DESC", (r["code"],)).fetchone()
+        if t:
+            return (" · срок закончился" if own.team_expired(t) else " · " + own.team_until(t)) if t["expires"] else ""
+        return f" · {r['days']} дн." if r["days"] else ""
     await m.answer("<b>Коды доступа</b>\n" + "\n".join(f"<code>{r['code']}</code> – {niche(r['niche'])['title']}, {'использован' if r['used_by'] else 'свободен'}"
-                                                         + (f" · {esc(r['note'])}" if r['note'] else "") for r in rows))
+                                                         + term(r) + (f" · {esc(r['note'])}" if r['note'] else "") for r in rows))
+
+
+@router.message(Command("term"))
+async def cmd_term(m: Message, command: CommandObject):
+    if not is_admin(m.from_user):
+        return
+    a = (command.args or "").split()
+    if len(a) != 2 or not a[1].isdigit():
+        await m.answer("Формат – <code>/term KT-XXXXXX 30</code>: срок в днях от сегодня, 0 – бессрочно.")
+        return
+    days = int(a[1])
+    res = own.set_term(a[0], days)
+    if not res:
+        await m.answer("Такого кода нет.")
+    elif res == "team":
+        await m.answer(f"Готово. Проверка отдела открыта {'бессрочно' if not days else time.strftime('до %d.%m.%Y', time.localtime(time.time() + days * 86400))}.")
+    else:
+        await m.answer(f"Готово. Код еще не введен – срок {'бессрочный' if not days else f'{days} дн.'} начнется, когда собственник его введет.")
 
 
 @router.message(Command("stats"))
@@ -999,8 +1034,9 @@ async def on_text(m: Message):
         tid = own.create_team(uid, m.chat.id, title, code, NUMS.get(uid, DEFAULT_NUMBERS) if nid == "realestate" else niche(nid)["nums"], nid)
         t = own.team(tid)
         link = team_link(await bot_name(m.bot), tid)
+        until = f"Проверка открыта {own.team_until(t)}. " if t["expires"] else ""
         await m.answer(f"Отдел «{esc(title)}» создан. {nums_text(own.team_nums(t), own.team_niche(t)['page']['check'].split(',')[0].lower(), own.team_niche(t)['cur'])}\n\n"
-                       "Перешлите менеджерам сообщение ниже. Когда каждый закончит, я пришлю вам уведомление, а отчет по отделу можно открыть в любой момент – /team")
+                       f"{until}Перешлите менеджерам сообщение ниже. Когда каждый закончит, я пришлю вам уведомление, а отчет по отделу можно открыть в любой момент – /team")
         await m.answer(invite_text(t, link), disable_web_page_preview=True)
         return
     if uid in WAIT_NUMS:

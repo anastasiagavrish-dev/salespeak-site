@@ -143,6 +143,8 @@ async def api_session(req):
     t = own.team(team_id) if team_id else None
     if team_id and not t:
         return web.json_response({"error": "team"}, status=404)
+    if own.team_expired(t):
+        return web.json_response({"error": "expired"}, status=403)
     if not t:
         day = time.time() - 86400
         STARTS[who] = [x for x in STARTS[who] if x > day]
@@ -181,6 +183,8 @@ async def api_session(req):
 
 async def api_team(req):
     t = own.team(req.query.get("team", ""))
+    if own.team_expired(t):
+        return web.json_response({"error": "expired"}, status=403)
     return web.json_response({"title": t["title"], "nums": own.team_nums(t), "niche": own.team_niche(t)["id"]} if t else {"error": "team"},
                              status=200 if t else 404)
 
