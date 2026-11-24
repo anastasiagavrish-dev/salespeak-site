@@ -24,13 +24,14 @@ RewriteRule ^page60733515\.html$ https://a-gavrish.com/uslugi/treningi/ [R=301,L
 RewriteRule ^page69674949\.html$ https://a-gavrish.com/cases/africa/ [R=301,L]
 RewriteRule ^page70970525\.html$ https://a-gavrish.com/cases/business-travels/ [R=301,L]
 RewriteRule ^page70982473\.html$ https://a-gavrish.com/cases/detskaya-odezhda/ [R=301,L]
-RewriteRule ^page70984763\.html$ https://a-gavrish.com/cases/gynecology/ [R=301,L]
+RewriteRule ^page70984763\.html$ https://a-gavrish.com/cases/ [R=301,L]
+RewriteRule ^cases/gynecology/?$ https://a-gavrish.com/cases/ [R=301,L]
 RewriteRule ^page71731505\.html$ https://a-gavrish.com/cases/events-equipment/ [R=301,L]
 RewriteRule ^page71732017\.html$ https://a-gavrish.com/cases/bigtech/ [R=301,L]
 RewriteRule ^page71733105\.html$ https://a-gavrish.com/cases/kpi-za-3-dnya/ [R=301,L]
 RewriteRule ^page72114641\.html$ https://a-gavrish.com/cases/marketplaces/ [R=301,L]
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^cases/(africa|business-travels|detskaya-odezhda|gynecology|events-equipment|bigtech|kpi-za-3-dnya|marketplaces)/?$ https://a-gavrish.com/cases/ [R=302,L]
+RewriteRule ^cases/(africa|business-travels|detskaya-odezhda|events-equipment|bigtech|kpi-za-3-dnya|marketplaces)/?$ https://a-gavrish.com/cases/ [R=302,L]
 RewriteRule ^(_app|_data)(/|$) - [F,L]
 RewriteRule ^api/lead/?$ api/lead.php [L]
 </IfModule>

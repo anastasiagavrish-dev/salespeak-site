@@ -191,7 +191,7 @@ def home():
     svc = "".join(f"""<article class="svc"><h3><a href="{u('uslugi/' + s['slug'] + '/')}">{E(s['name'])}</a></h3><dl><dt>Кому</dt><dd>{E(s['short_who'])}</dd><dt>Что изменится</dt><dd>{E(s['short_what'])}</dd></dl></article>"""
                   for s in SERVICES if s["slug"] not in HOME_MORE)
     more = ", ".join(f'<a href="{u("uslugi/" + s["slug"] + "/")}">{E(s["name"].lower())}</a>' for s in SERVICES if s["slug"] in HOME_MORE)
-    cases = "".join(case_card(CASE[k]) for k in ["africa", "b2b-case", "gynecology", "cosmetic"])
+    cases = "".join(case_card(CASE[k]) for k in ["africa", "b2b-case", "kpi-za-3-dnya", "cosmetic"])
     faq, faq_ld = faq_block(FAQ_HOME)
     body = f"""
 <section class="hero"><div class="wrap hero-in"><div class="hero-text">
@@ -202,7 +202,7 @@ def home():
 <figure class="hero-photo"><img src="{a('img/hero.webp')}" width="760" height="950" alt="Анастасия Гавриш, эксперт по продажам" fetchpriority="high"><figcaption><b>Анастасия Гавриш</b><span>эксперт по продажам</span></figcaption></figure>
 </div></section>
 <section class="facts" aria-label="Цифры"><div class="wrap"><ul class="facts-list">
-<li><b>16+</b><span>лет в продажах и маркетинге</span></li><li><b>200 млн ₸</b><span>личных B2B-продаж за 2024 год</span></li><li><b>10</b><span>проектов, разобранных в кейсах</span></li></ul>
+<li><b>16+</b><span>лет в продажах и маркетинге</span></li><li><b>200 млн ₸</b><span>личных B2B-продаж за 2024 год</span></li><li><b>{len(CASES)}</b><span>проектов, разобранных в кейсах</span></li></ul>
 <p class="niches"><span>Ниши клиентов</span> туризм, медицина, бигтех, B2B-дистрибуция, маркетплейсы, ивенты, реклама, детская одежда</p></div></section>
 <section class="sit" id="situations"><div class="wrap"><div class="sec-head"><p class="label">Ваша ситуация</p><h2>С чем ко мне приходят</h2></div><ol class="sit-list">
 <li><p class="quote">«Отдела продаж нет, все держится на мне»</p><p class="ans">Соберу отдел с нуля или возьму роль РОПа на время, пока система не заработает без вас.</p><a href="{u('uslugi/otdel-prodazh/')}">Построение отдела продаж</a></li>
@@ -330,7 +330,7 @@ def cases_hub():
 <section class="cases-cat"><div class="wrap"><div class="chips" role="group" aria-label="Фильтр по услуге">{chips}</div><div class="case-list">{cards}</div>
 <p class="empty" hidden>По этой услуге кейсов пока нет.</p></div></section>{offer_block()}"""
     layout("cases/", "Кейсы по продажам – аудит, скрипты, построение отдела продаж",
-           "Кейсы Анастасии Гавриш – скрипты продаж, аудит отдела продаж, построение отдела в сети клиник, тендер в B2B, тренинги, мотивация и юнит-экономика.", body, cld)
+           "Кейсы Анастасии Гавриш – скрипты продаж, аудит отдела продаж, тендер в B2B, тренинги, мотивация и юнит-экономика.", body, cld)
 
 
 def case_page(c):
