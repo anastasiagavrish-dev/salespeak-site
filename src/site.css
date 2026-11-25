@@ -470,3 +470,5 @@ h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
   .game-band-cta .btn{width:100%}
 }
 @media (prefers-reduced-motion:reduce){.nav-game-dot{animation:none}}
+.nav a{white-space:nowrap}
+@media (min-width:861px) and (max-width:1080px){.nav{gap:14px;font-size:14px}.top-in{gap:16px}.logo-t b{white-space:nowrap}.logo-t small{display:none}.nav-game{padding:0 12px}}
