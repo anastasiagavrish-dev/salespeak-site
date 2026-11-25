@@ -86,7 +86,7 @@ class Render:
         m = re.match(r"Шаг (\d+)\.\s*(.*)", t)
         if m:
             hid = "shag-" + m.group(1)
-            self.toc.append((hid, f"{m.group(1)}. {m.group(2)}"))
+            self.toc.append((hid, m.group(2)))
             return f'<h2 id="{hid}" class="p-step"><span class="p-num">Шаг {m.group(1)}</span> {self.inline(m.group(2))}</h2>'
         hid = slugify(t)
         self.toc.append((hid, t))
@@ -106,14 +106,17 @@ class Render:
     def lead_split(self, item):
         """«**Название.** текст» → (Название, текст); ссылка в названии сохраняется."""
         m = re.match(r"^\*\*(.+?)\*\*\s*[–-]?\s*(.*)", item)
-        return (m.group(1).rstrip("."), m.group(2)) if m else ("", item)
+        if not m:
+            return "", item
+        rest = m.group(2)
+        return m.group(1).rstrip("."), rest[:1].upper() + rest[1:]
 
     def block(self, kind, label, lines):
         if kind == "cards":
             cards = []
             for n, it in enumerate(self.items(lines), 1):
                 t, rest = self.lead_split(it)
-                cards.append(f'<li><span class="p-card-n">{n:02d}</span><h3>{self.inline(t)}</h3><p>{self.inline(rest)}</p></li>')
+                cards.append(f'<li><span class="p-card-n">{n:02d}</span><div><h3>{self.inline(t)}</h3><p>{self.inline(rest)}</p></div></li>')
             return f'<ol class="p-cards">{"".join(cards)}</ol>'
         if kind == "tiles":
             tiles = []
@@ -191,12 +194,16 @@ class Render:
         return "\n".join(out)
 
 
+def toc_html(toc, cls):
+    items = "".join(f'<li><a href="#{i}">{E(t)}</a></li>' for i, t in toc)
+    return f'<nav class="{cls}" aria-label="Содержание"><p class="p-label">Содержание</p><ol>{items}</ol></nav>'
+
+
 def render_post(body, u):
-    """Текст статьи → (html, содержание [(id, заголовок)])."""
+    """Текст статьи → (html, содержание для боковой колонки). Содержание в тексте видно только на узких экранах."""
     r = Render(u)
     h = r.render(body.splitlines())
-    toc = "".join(f'<li><a href="#{i}">{E(t)}</a></li>' for i, t in r.toc)
-    return h.replace("<!--TOC-->", f'<nav class="p-toc" aria-label="Содержание"><p class="p-label">Содержание</p><ol>{toc}</ol></nav>'), r.toc
+    return h.replace("<!--TOC-->", toc_html(r.toc, "p-toc")), toc_html(r.toc, "p-toc-side")
 
 
 if __name__ == "__main__":
@@ -204,6 +211,6 @@ if __name__ == "__main__":
     root = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
     for p in load_posts(root):
         h, toc = render_post(p["body"], lambda x: "/" + x)
-        print(p["slug"], p["minutes"], "мин;", len(toc), "разделов;", h.count("<aside"), "врезок;", len(p["faq"]), "вопросов")
+        print(p["slug"], p["minutes"], "мин;", toc.count("<li>"), "разделов;", h.count("<aside"), "врезок;", len(p["faq"]), "вопросов")
         if len(sys.argv) > 2:
             open(sys.argv[2], "w").write(h)

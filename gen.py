@@ -412,10 +412,10 @@ def post_page(p):
     crumbs, cld = breadcrumbs([("blog/", "Блог"), (path, p["h1"])])
     faq, faq_ld = faq_block(p["faq"])
     svc_links = "".join(f'<a href="{u("uslugi/" + k + "/")}">{E(SVC[k]["name"])}</a>' for k in p["services"] if k in SVC)
-    text, _ = render_post(p["body"], u)
+    text, side_toc = render_post(p["body"], u)
     body = f"""{crumbs}<article><header class="page-hero post-hero"><div class="wrap"><p class="eyebrow">Статья</p><h1>{E(p['h1'])}</h1>
 <p class="post-meta"><span>Анастасия Гавриш, эксперт по продажам</span><span>{ru_date(p['date'])}</span><span>{p['minutes']} мин чтения</span></p></div></header>
-<div class="post-sec"><div class="wrap"><div class="post-body">{text}</div></div></div></article>
+<div class="post-sec"><div class="wrap post-layout"><div class="post-body">{text}</div><aside>{side_toc}</aside></div></div></article>
 {faq}
 <section class="also"><div class="wrap"><p class="label">Услуги по теме</p><nav class="chips" aria-label="Услуги по теме">{svc_links}</nav></div></section>
 {offer_block()}"""
