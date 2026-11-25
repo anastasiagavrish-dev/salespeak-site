@@ -172,18 +172,35 @@ def case_card(c):
     return f"""<{tag} class="case" data-tags="{' '.join(c['tags'])}"{href}><span class="case-niche">{E(c['niche'])}</span><b class="case-num">{E(c['metric'])}</b><span class="case-txt">{E(c['metric_txt'])}</span>{soon}</{tag}>"""
 
 
+LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+
+
+def rich(t):
+    """Текст с экранированием и ссылками вида [текст](адрес). Адрес GAME – игра «Касса тает», /путь/ – страница сайта."""
+    def rep(m):
+        href = m.group(2)
+        href = GAME_BOT if href == "GAME" else (u(href.lstrip("/")) if href.startswith("/") else href)
+        return f'<a href="{href}"{" data-game" if href == GAME_BOT else ""}>{m.group(1)}</a>'
+    return LINK_RE.sub(rep, E(t))
+
+
+def plain(t):
+    """Тот же текст без разметки ссылок – для description и разметки schema.org."""
+    return LINK_RE.sub(r"\1", t)
+
+
 def faq_block(items, head=True):
     if not items:
         return "", None
-    det = "".join(f"<details><summary>{E(q)}</summary><p>{E(ans)}</p></details>" for q, ans in items)
+    det = "".join(f"<details><summary>{E(q)}</summary><p>{rich(ans)}</p></details>" for q, ans in items)
     ld = {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
-        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": ans}} for q, ans in items]}
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": plain(ans)}} for q, ans in items]}
     return f"""<section class="faq" aria-label="Частые вопросы"><div class="wrap faq-in"><div class="sec-head"><p class="label">Вопросы</p><h2>Частые вопросы</h2></div><div class="faq-list">{det}</div></div></section>""", ld
 
 
 # ---------------- страницы ----------------
 
-HOME_MORE = {"kontrol-kachestva"}  # услуги, которые на главной идут ссылкой «Еще – …», а не карточкой
+HOME_MORE = {"kontrol-kachestva", "rabota-s-bazoj", "obuchenie-rop", "treningi/administratory-kliniki", "otdel-prodazh/marketingovye-agentstva"}  # услуги, которые на главной идут ссылкой «Еще – …», а не карточкой
 PRINCIPLES = "".join(f"<li>{p}</li>" for p in [
     "Экологичные продажи без манипуляций и давления – продаем решение проблемы и только тем, кому можем помочь",
     "Человеческие продажи вместо «Добрый день, интересует?»",
@@ -267,11 +284,14 @@ def service_page(s):
     global _cur
     path = f"uslugi/{s['slug']}/"
     _cur = path
-    crumbs, cld = breadcrumbs([("uslugi/", "Услуги"), (path, s["name"])])
+    parent = [("uslugi/" + s["parent"] + "/", SVC[s["parent"]]["name"])] if s.get("parent") else []
+    crumbs, cld = breadcrumbs([("uslugi/", "Услуги")] + parent + [(path, s["name"])])
     who = "".join(f"<li>{E(x)}</li>" for x in s["who"])
-    steps = "".join(f"<li><h3>{E(t)}</h3><p>{E(d)}</p></li>" for t, d in s["steps"])
+    steps = "".join(f"<li><h3>{E(t)}</h3><p>{rich(d)}</p></li>" for t, d in s["steps"])
     res = "".join(f"<li>{E(x)}</li>" for x in s["result"])
-    note = f'<p class="note-line">{E(s["note"])}</p>' if s["note"] else ""
+    note = f'<p class="note-line">{rich(s["note"])}</p>' if s["note"] else ""
+    links = "".join(f'<li><a href="{u("uslugi/" + sl + "/")}">{E(t)}</a></li>' for t, sl in s.get("links", []))
+    links_html = f'<section class="also"><div class="wrap"><p class="label">Отдельные программы</p><ul class="post-links">{links}</ul></div></section>' if links else ""
     cases = "".join(case_card(CASE[k]) for k in s["cases"])
     cases_html = f"""<section class="cases"><div class="wrap"><div class="sec-head"><p class="label">Кейсы</p><h2>Как это было у клиентов</h2></div><div class="case-grid">{cases}</div></div></section>""" if cases else ""
     faq, faq_ld = faq_block(s["faq"])
@@ -281,7 +301,7 @@ def service_page(s):
 <section class="sit"><div class="wrap"><div class="sec-head"><p class="label">Кому подходит</p><h2>Узнаете свою ситуацию?</h2></div><ul class="ticks">{who}</ul></div></section>
 <section class="method"><div class="wrap"><div class="sec-head"><p class="label">Как проходит</p><h2>Этапы работы</h2></div><ol class="steps">{steps}</ol>{note}</div></section>
 <section class="result"><div class="wrap"><div class="sec-head"><p class="label">Результат</p><h2>Что вы получите</h2></div><ul class="ticks ticks-big">{res}</ul></div></section>
-{cases_html}{related_posts(s['slug'])}{offer_block()}{faq}
+{links_html}{cases_html}{related_posts(s['slug'])}{offer_block()}{faq}
 <section class="also"><div class="wrap"><p class="label">Другие услуги</p><nav class="chips" aria-label="Другие услуги">{others}</nav></div></section>"""
     ld = [cld, {"@context": "https://schema.org", "@type": "Service", "name": s["name"], "description": s["desc"], "provider": {"@type": "Person", "name": "Анастасия Гавриш", "url": SITE + "/"},
                 "areaServed": ["RU", "KZ"], "url": SITE + "/" + path}] + ([faq_ld] if faq_ld else [])
