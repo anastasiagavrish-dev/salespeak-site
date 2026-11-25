@@ -3,6 +3,8 @@
 PHONE_TXT = "+7 747 237 15 36"
 TG = "https://t.me/gavrish_anastasiya"
 WA = "https://wa.me/77472371536"
+GAME_BOT = "https://t.me/kassa_taet_bot"  # игра «Касса тает» – основная ссылка, в боте есть меню и командные проверки
+GAME_WEB = "https://game.a-gavrish.com/"  # та же игра в браузере – для тех, у кого нет Telegram
 
 SERVICES = [
     dict(slug="audit", name="Аудит отдела продаж", short_who="Лиды есть, а продаж меньше, чем должно быть",

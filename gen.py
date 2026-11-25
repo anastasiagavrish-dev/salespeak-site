@@ -4,7 +4,7 @@ python3 gen.py            → public/   (боевая версия, ссылки
 python3 gen.py preview    → preview/  (для превью-артефакта, относительные ссылки на index.html, форма без бэкенда)
 """
 import html, json, os, re, shutil, sys
-from content import SERVICES, SVC, CASES, CASE, CASE_FULL, FAQ_HOME, TG, WA, PHONE_TXT
+from content import SERVICES, SVC, CASES, CASE, CASE_FULL, FAQ_HOME, TG, WA, PHONE_TXT, GAME_BOT, GAME_WEB
 
 PREVIEW = len(sys.argv) > 1 and sys.argv[1] == "preview"
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -52,13 +52,25 @@ def header(offer_href):
 <header class="top"><div class="wrap top-in">
 <a class="logo" href="{u('')}"><span class="logo-mark" aria-hidden="true">G</span><span class="logo-t"><b>Анастасия Гавриш</b><small>эксперт по продажам</small></span></a>
 <nav class="nav" aria-label="Разделы">{items}</nav>
+<a class="nav-game" href="{GAME_BOT}" data-game><span class="nav-game-dot" aria-hidden="true"></span><span class="nav-game-long">Игра для менеджеров</span><span class="nav-game-short">Игра</span></a>
 <a class="btn btn-sm" href="{offer_href}">Хочу разбор</a>
-</div></header>"""
+</div>
+<a class="game-strip" href="{GAME_BOT}" data-game><b>Игра для менеджеров «Касса тает»</b> <span>проверьте свои продажи в Telegram</span></a></header>"""
+
+
+def game_band():
+    """Блок игры «Касса тает» – на главной. Основная кнопка ведет в Telegram-бот, запасная – в браузер."""
+    return f"""<section class="game-band" id="game"><div class="wrap game-band-in">
+<div class="game-band-text"><p class="label">Игра для менеджеров</p><h2>«Касса тает» – проверьте, сколько денег теряется в переписке</h2>
+<p>Пять клиентов из вашей ниши по очереди пишут менеджеру – недвижимость, стоматология, спа, турагентство, B2B и другие. Каждый слитый клиент забирает деньги из кассы, а после каждого диалога нейросеть показывает ошибки и как стоило ответить.</p>
+<p>Хотите проверить всю команду? В боте есть режим «Проверить мой отдел продаж» – менеджеры проходят игру по вашей ссылке, а результаты каждого приходят вам. Код доступа к нему пришлю по запросу в <a href="{TG}">Telegram</a>.</p></div>
+<div class="game-band-cta"><a class="btn" href="{GAME_BOT}" data-game>Играть в Telegram</a><a class="game-band-alt" href="{GAME_WEB}" data-game>Нет Telegram? Играть в браузере</a><p>Бесплатно</p></div>
+</div></section>"""
 
 
 def footer():
     return f"""<footer class="foot"><div class="wrap foot-in">
-<div><b>Анастасия Гавриш</b><p>Эксперт по продажам, Алматы</p><p class="foot-small">Telegram <a href="{TG}">@gavrish_anastasiya</a><br>WhatsApp <span class="sel">{PHONE_TXT}</span></p><p class="foot-small">Каналы в Telegram<br><a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a><br><a href="https://t.me/razborprodaj">«Разборы продаж»</a></p></div>
+<div><b>Анастасия Гавриш</b><p>Эксперт по продажам, Алматы</p><p class="foot-small">Telegram <a href="{TG}">@gavrish_anastasiya</a><br>WhatsApp <span class="sel">{PHONE_TXT}</span></p><p class="foot-small">Каналы в Telegram<br><a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a><br><a href="https://t.me/razborprodaj">«Разборы продаж»</a></p><p class="foot-small">Игра для менеджеров<br><a href="{GAME_BOT}" data-game>«Касса тает» в Telegram</a></p></div>
 <nav aria-label="Разделы сайта">{''.join(f'<a href="{u(p)}">{t}</a>' for p, t in NAV)}</nav>
 <nav aria-label="Документы"><a href="{u('privacy/')}">Политика конфиденциальности</a><a href="{u('soglasie/')}">Согласие на обработку данных</a><a href="{u('soglasie-reklama/')}">Согласие на рекламные рассылки</a><button class="linklike" type="button" data-cookie-settings>Настройки cookie</button></nav>
 </div></footer>
@@ -204,6 +216,7 @@ def home():
 <section class="facts" aria-label="Цифры"><div class="wrap"><ul class="facts-list">
 <li><b>16+</b><span>лет в продажах и маркетинге</span></li><li><b>200 млн ₸</b><span>личных B2B-продаж за 2024 год</span></li><li><b>{len(CASES)}</b><span>проектов, разобранных в кейсах</span></li></ul>
 <p class="niches"><span>Ниши клиентов</span> туризм, медицина, бигтех, B2B-дистрибуция, маркетплейсы, ивенты, реклама, детская одежда</p></div></section>
+{game_band()}
 <section class="sit" id="situations"><div class="wrap"><div class="sec-head"><p class="label">Ваша ситуация</p><h2>С чем ко мне приходят</h2></div><ol class="sit-list">
 <li><p class="quote">«Отдела продаж нет, все держится на мне»</p><p class="ans">Соберу отдел с нуля или возьму роль РОПа на время, пока система не заработает без вас.</p><a href="{u('uslugi/otdel-prodazh/')}">Построение отдела продаж</a></li>
 <li><p class="quote">«Лиды идут, а продаж мало»</p><p class="ans">Найду, на каком этапе менеджеры теряют клиентов, и дам им скрипт, который ведет до оплаты.</p><a href="{u('uslugi/audit/')}">Аудит отдела продаж</a></li>

@@ -65,14 +65,14 @@ def load_posts(root):
     return sorted(posts, key=lambda p: p["date"], reverse=True)
 
 
-GAME_URL = "https://game.a-gavrish.com/"
+from content import GAME_BOT, GAME_WEB
 
 
 def game_block(tag="aside"):
     """Блок игры-тренажера «Касса тает»: в статье и на странице блога."""
     return f"""<{tag} class="p-game"><p class="p-label">Тренажер «Касса тает»</p><h3>Проверьте своих продавцов в игре</h3>
 <p>Если хотите проверить менеджеров прямо сейчас, дайте им пройти мой тренажер. Менеджер переписывается с пятью клиентами из вашей ниши – недвижимость, стоматология, спа, турагентство, B2B и другие. Каждый слитый клиент забирает деньги из кассы, а после каждого диалога нейросеть показывает ошибки и как стоило ответить.</p>
-<a class="btn" href="{GAME_URL}">Играть бесплатно</a></{tag}>"""
+<a class="btn" href="{GAME_BOT}" data-game>Играть в Telegram</a><a class="p-game-alt" href="{GAME_WEB}" data-game>Нет Telegram? Играть в браузере</a></{tag}>"""
 
 
 class Render:

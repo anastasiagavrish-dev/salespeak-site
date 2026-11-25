@@ -29,6 +29,7 @@
       if (b.getAttribute('data-cookie') === 'yes') loadMetrika();
     }
     if (e.target.closest('[data-cookie-settings]') && banner) banner.hidden = false;
+    if (e.target.closest('[data-game]')) { goal('game'); return; }
     var m = e.target.closest('a[href^="https://t.me"],a[href^="https://wa.me"]');
     if (m) goal('messenger');
   });
