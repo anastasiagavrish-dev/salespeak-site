@@ -268,7 +268,7 @@ def service_page(s):
 <section class="sit"><div class="wrap"><div class="sec-head"><p class="label">Кому подходит</p><h2>Узнаете свою ситуацию?</h2></div><ul class="ticks">{who}</ul></div></section>
 <section class="method"><div class="wrap"><div class="sec-head"><p class="label">Как проходит</p><h2>Этапы работы</h2></div><ol class="steps">{steps}</ol>{note}</div></section>
 <section class="result"><div class="wrap"><div class="sec-head"><p class="label">Результат</p><h2>Что вы получите</h2></div><ul class="ticks ticks-big">{res}</ul></div></section>
-{cases_html}{offer_block()}{faq}
+{cases_html}{related_posts(s['slug'])}{offer_block()}{faq}
 <section class="also"><div class="wrap"><p class="label">Другие услуги</p><nav class="chips" aria-label="Другие услуги">{others}</nav></div></section>"""
     ld = [cld, {"@context": "https://schema.org", "@type": "Service", "name": s["name"], "description": s["desc"], "provider": {"@type": "Person", "name": "Анастасия Гавриш", "url": SITE + "/"},
                 "areaServed": ["RU", "KZ"], "url": SITE + "/" + path}] + ([faq_ld] if faq_ld else [])
@@ -384,14 +384,137 @@ def about_page():
            "Анастасия Гавриш – эксперт по продажам с 2010 года, 200 млн тенге личных B2B-продаж за 2024 год, 7 лет в кино, МГТУ им. Баумана. Алматы.", body, [cld, {"@context": "https://schema.org", **PERSON}])
 
 
+# ---------------- блог ----------------
+
+MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+
+
+def ru_date(d):
+    y, m, dd = d.split("-")
+    return f"{int(dd)} {MONTHS[int(m) - 1]} {y}"
+
+
+def _inline(t):
+    """Строка markdown → html: **жирный**, [текст](ссылка). Ссылки на свой сайт становятся внутренними."""
+    t = E(t, quote=False)
+
+    def link(m):
+        href = m.group(2)
+        if href.startswith(SITE):
+            href = u(href[len(SITE) + 1:])
+        return f'<a href="{href}">{m.group(1)}</a>'
+    t = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, t)
+    t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+    return t
+
+
+def md(text):
+    """Простой markdown статей: ## заголовок, абзацы, списки «1.» и «-»."""
+    out, buf, lst = [], [], None
+
+    def flush():
+        nonlocal buf, lst
+        if buf:
+            out.append("<p>" + _inline(" ".join(buf)) + "</p>")
+            buf = []
+        if lst:
+            tag, items = lst
+            cls = ' class="olist"' if tag == "ol" else ""
+            out.append(f"<{tag}{cls}>" + "".join(f"<li>{_inline(i)}</li>" for i in items) + f"</{tag}>")
+            lst = None
+    for line in text.splitlines():
+        line = line.rstrip()
+        mo, mu = re.match(r"^\d+\.\s+(.*)", line), re.match(r"^-\s+(.*)", line)
+        if not line:
+            flush()
+        elif line.startswith("## "):
+            flush()
+            out.append(f"<h2>{_inline(line[3:])}</h2>")
+        elif mo or mu:
+            tag = "ol" if mo else "ul"
+            if buf or (lst and lst[0] != tag):
+                flush()
+            lst = lst or (tag, [])
+            lst[1].append((mo or mu).group(1))
+        else:
+            if lst:
+                flush()
+            buf.append(line)
+    flush()
+    return "\n".join(out)
+
+
+def load_posts():
+    """Статьи блога из posts/*.md: шапка «ключ: значение», строка ---, текст. Вопросы FAQ начинаются с «?? »."""
+    posts = []
+    d = os.path.join(ROOT, "posts")
+    for fn in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if not fn.endswith(".md"):
+            continue
+        raw = open(os.path.join(d, fn), encoding="utf-8").read()
+        head, _, body = raw.partition("\n---\n")
+        meta = dict(l.split(": ", 1) for l in head.splitlines() if ": " in l)
+        faq, text = [], []
+        lines = body.strip().splitlines()
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith("?? "):
+                q, i, ans = lines[i][3:].strip(), i + 1, []
+                while i < len(lines) and lines[i].strip() and not lines[i].startswith("?? "):
+                    ans.append(lines[i].strip())
+                    i += 1
+                faq.append((q, " ".join(ans)))
+            else:
+                text.append(lines[i])
+                i += 1
+        meta["services"] = dict(x.strip().split("=", 1) for x in meta.get("services", "").split(";") if "=" in x)
+        posts.append({**meta, "body": "\n".join(text), "faq": faq})
+    return sorted(posts, key=lambda p: p["date"], reverse=True)
+
+
+POSTS = load_posts()
+
+
 def blog_page():
     global _cur
     _cur = "blog/"
     crumbs, cld = breadcrumbs([("blog/", "Блог")])
+    if POSTS:
+        cards = "".join(f"""<article class="post-card"><p class="post-date">{ru_date(p['date'])}</p><h2><a href="{u('blog/' + p['slug'] + '/')}">{E(p['h1'])}</a></h2><p>{E(p['description'])}</p></article>""" for p in POSTS)
+        listing = f'<section class="blog-list"><div class="wrap"><div class="post-list">{cards}</div></div></section>'
+    else:
+        listing = f"""<section class="blog-empty"><div class="wrap"><div class="empty-card"><h2>Первые статьи готовятся</h2><p>Пока можно почитать <a href="{u('cases/')}">кейсы</a> или подписаться на мои Telegram-каналы <a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a> и <a href="https://t.me/razborprodaj">«Разборы продаж»</a>.</p></div></div></section>"""
     body = f"""{crumbs}<section class="page-hero"><div class="wrap"><p class="eyebrow">Блог</p><h1>Разборы и статьи о продажах</h1>
-<p class="lead">Здесь будут разборы реальных переписок, ответы на возражения и статьи о том, как устроить отдел продаж.</p></div></section>
-<section class="blog-empty"><div class="wrap"><div class="empty-card"><h2>Первые статьи готовятся</h2><p>Пока можно почитать <a href="{u('cases/')}">кейсы</a> или подписаться на мои Telegram-каналы <a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a> и <a href="https://t.me/razborprodaj">«Разборы продаж»</a>.</p></div></div></section>"""
+<p class="lead">Разборы реальных переписок, ответы на возражения и статьи о том, как устроить отдел продаж.</p></div></section>{listing}{offer_block()}"""
     layout("blog/", "Блог о продажах", "Статьи и разборы о продажах, скриптах, возражениях и построении отдела продаж от Анастасии Гавриш.", body, cld)
+
+
+def post_page(p):
+    global _cur
+    path = f"blog/{p['slug']}/"
+    _cur = path
+    crumbs, cld = breadcrumbs([("blog/", "Блог"), (path, p["h1"])])
+    faq, faq_ld = faq_block(p["faq"])
+    svc_links = "".join(f'<a href="{u("uslugi/" + k + "/")}">{E(SVC[k]["name"])}</a>' for k in p["services"] if k in SVC)
+    body = f"""{crumbs}<article><header class="page-hero post-hero"><div class="wrap"><p class="eyebrow">Статья · {ru_date(p['date'])}</p><h1>{E(p['h1'])}</h1>
+<p class="post-author">Анастасия Гавриш, эксперт по продажам</p></div></header>
+<section class="prose-sec"><div class="wrap prose post">{md(p['body'])}</div></section></article>
+{faq}
+<section class="recog"><div class="wrap recog-in"><h2>Хотите, я посмотрю ваш отдел?</h2><p>Пришлите 4–6 переписок или звонков менеджеров – покажу, где теряются сделки.</p><a class="btn" href="#offer">Хочу разбор переписок</a></div></section>
+<section class="also"><div class="wrap"><p class="label">Услуги по теме</p><nav class="chips" aria-label="Услуги по теме">{svc_links}</nav></div></section>
+{offer_block()}"""
+    ld = [cld, {"@context": "https://schema.org", "@type": "BlogPosting", "headline": p["h1"], "description": p["description"],
+                "datePublished": p["date"], "dateModified": p.get("updated", p["date"]), "inLanguage": "ru",
+                "author": {"@type": "Person", "@id": SITE + "/#person", "name": "Анастасия Гавриш", "url": SITE + "/about/"},
+                "publisher": {"@type": "Person", "@id": SITE + "/#person", "name": "Анастасия Гавриш"},
+                "image": SITE + "/assets/og.jpg", "mainEntityOfPage": SITE + "/" + path}] + ([faq_ld] if faq_ld else [])
+    layout(path, p["title"], p["description"], body, ld)
+
+
+def related_posts(slug):
+    """Статьи блога, которые ссылаются на услугу, с анкором из поля services статьи."""
+    links = "".join(f'<li><a href="{u("blog/" + p["slug"] + "/")}">{E(p["services"][slug])}</a></li>' for p in POSTS if slug in p["services"])
+    return f'<section class="also"><div class="wrap"><p class="label">Статьи по теме</p><ul class="post-links">{links}</ul></div></section>' if links else ""
 
 
 def doc_page(path, title, desc, html_body):
@@ -494,7 +617,10 @@ def build(final):
     for c in CASES:
         if c["full"]:
             case_page(c)
-    about_page(); blog_page(); docs(); not_found()
+    about_page(); blog_page()
+    for p in POSTS:
+        post_page(p)
+    docs(); not_found()
     if not PREVIEW:
         urls = "".join(f"<url><loc>{SITE}/{p}</loc></url>" for p in SITEMAP)
         open(os.path.join(OUT, "sitemap.xml"), "w").write(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
