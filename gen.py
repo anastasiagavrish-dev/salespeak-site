@@ -386,93 +386,9 @@ def about_page():
 
 # ---------------- блог ----------------
 
-MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+from blog import load_posts, render_post, ru_date  # статьи – posts/*.md, разметка – blog.py
 
-
-def ru_date(d):
-    y, m, dd = d.split("-")
-    return f"{int(dd)} {MONTHS[int(m) - 1]} {y}"
-
-
-def _inline(t):
-    """Строка markdown → html: **жирный**, [текст](ссылка). Ссылки на свой сайт становятся внутренними."""
-    t = E(t, quote=False)
-
-    def link(m):
-        href = m.group(2)
-        if href.startswith(SITE):
-            href = u(href[len(SITE) + 1:])
-        return f'<a href="{href}">{m.group(1)}</a>'
-    t = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, t)
-    t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
-    return t
-
-
-def md(text):
-    """Простой markdown статей: ## заголовок, абзацы, списки «1.» и «-»."""
-    out, buf, lst = [], [], None
-
-    def flush():
-        nonlocal buf, lst
-        if buf:
-            out.append("<p>" + _inline(" ".join(buf)) + "</p>")
-            buf = []
-        if lst:
-            tag, items = lst
-            cls = ' class="olist"' if tag == "ol" else ""
-            out.append(f"<{tag}{cls}>" + "".join(f"<li>{_inline(i)}</li>" for i in items) + f"</{tag}>")
-            lst = None
-    for line in text.splitlines():
-        line = line.rstrip()
-        mo, mu = re.match(r"^\d+\.\s+(.*)", line), re.match(r"^-\s+(.*)", line)
-        if not line:
-            flush()
-        elif line.startswith("## "):
-            flush()
-            out.append(f"<h2>{_inline(line[3:])}</h2>")
-        elif mo or mu:
-            tag = "ol" if mo else "ul"
-            if buf or (lst and lst[0] != tag):
-                flush()
-            lst = lst or (tag, [])
-            lst[1].append((mo or mu).group(1))
-        else:
-            if lst:
-                flush()
-            buf.append(line)
-    flush()
-    return "\n".join(out)
-
-
-def load_posts():
-    """Статьи блога из posts/*.md: шапка «ключ: значение», строка ---, текст. Вопросы FAQ начинаются с «?? »."""
-    posts = []
-    d = os.path.join(ROOT, "posts")
-    for fn in sorted(os.listdir(d)) if os.path.isdir(d) else []:
-        if not fn.endswith(".md"):
-            continue
-        raw = open(os.path.join(d, fn), encoding="utf-8").read()
-        head, _, body = raw.partition("\n---\n")
-        meta = dict(l.split(": ", 1) for l in head.splitlines() if ": " in l)
-        faq, text = [], []
-        lines = body.strip().splitlines()
-        i = 0
-        while i < len(lines):
-            if lines[i].startswith("?? "):
-                q, i, ans = lines[i][3:].strip(), i + 1, []
-                while i < len(lines) and lines[i].strip() and not lines[i].startswith("?? "):
-                    ans.append(lines[i].strip())
-                    i += 1
-                faq.append((q, " ".join(ans)))
-            else:
-                text.append(lines[i])
-                i += 1
-        meta["services"] = dict(x.strip().split("=", 1) for x in meta.get("services", "").split(";") if "=" in x)
-        posts.append({**meta, "body": "\n".join(text), "faq": faq})
-    return sorted(posts, key=lambda p: p["date"], reverse=True)
-
-
-POSTS = load_posts()
+POSTS = load_posts(ROOT)
 
 
 def blog_page():
@@ -496,11 +412,11 @@ def post_page(p):
     crumbs, cld = breadcrumbs([("blog/", "Блог"), (path, p["h1"])])
     faq, faq_ld = faq_block(p["faq"])
     svc_links = "".join(f'<a href="{u("uslugi/" + k + "/")}">{E(SVC[k]["name"])}</a>' for k in p["services"] if k in SVC)
-    body = f"""{crumbs}<article><header class="page-hero post-hero"><div class="wrap"><p class="eyebrow">Статья · {ru_date(p['date'])}</p><h1>{E(p['h1'])}</h1>
-<p class="post-author">Анастасия Гавриш, эксперт по продажам</p></div></header>
-<section class="prose-sec"><div class="wrap prose post">{md(p['body'])}</div></section></article>
+    text, _ = render_post(p["body"], u)
+    body = f"""{crumbs}<article><header class="page-hero post-hero"><div class="wrap"><p class="eyebrow">Статья</p><h1>{E(p['h1'])}</h1>
+<p class="post-meta"><span>Анастасия Гавриш, эксперт по продажам</span><span>{ru_date(p['date'])}</span><span>{p['minutes']} мин чтения</span></p></div></header>
+<div class="post-sec"><div class="wrap"><div class="post-body">{text}</div></div></div></article>
 {faq}
-<section class="recog"><div class="wrap recog-in"><h2>Хотите, я посмотрю ваш отдел?</h2><p>Пришлите 4–6 переписок или звонков менеджеров – покажу, где теряются сделки.</p><a class="btn" href="#offer">Хочу разбор переписок</a></div></section>
 <section class="also"><div class="wrap"><p class="label">Услуги по теме</p><nav class="chips" aria-label="Услуги по теме">{svc_links}</nav></div></section>
 {offer_block()}"""
     ld = [cld, {"@context": "https://schema.org", "@type": "BlogPosting", "headline": p["h1"], "description": p["description"],
