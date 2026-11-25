@@ -430,3 +430,11 @@ h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
 .p-tools li{grid-template-columns:minmax(0,1fr);gap:8px}
 .p-story,.p-key,.p-cta{padding:24px 22px}
 .post-meta span+span::before{display:none}}
+.p-game{background:var(--grad);color:#fff;border-radius:var(--r);padding:34px 38px;margin:36px 0;max-width:760px;display:grid;gap:14px;justify-items:start}
+.p-game .p-label{color:var(--lime)}
+.p-game h3{font:600 clamp(22px,2.6vw,28px)/1.2 var(--display);color:#fff}
+.p-game p{color:rgba(255,255,255,.9)}
+.p-game .btn{background:var(--lime);color:var(--ink);margin-top:6px}
+.blog-game{padding-block:0 72px}
+.blog-game .p-game{margin:0;max-width:860px}
+@media (max-width:640px){.p-game{padding:26px 22px}}

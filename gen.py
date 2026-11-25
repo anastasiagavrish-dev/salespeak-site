@@ -386,7 +386,7 @@ def about_page():
 
 # ---------------- блог ----------------
 
-from blog import load_posts, render_post, ru_date  # статьи – posts/*.md, разметка – blog.py
+from blog import load_posts, render_post, ru_date, game_block  # статьи – posts/*.md, разметка – blog.py
 
 POSTS = load_posts(ROOT)
 
@@ -401,7 +401,8 @@ def blog_page():
     else:
         listing = f"""<section class="blog-empty"><div class="wrap"><div class="empty-card"><h2>Первые статьи готовятся</h2><p>Пока можно почитать <a href="{u('cases/')}">кейсы</a> или подписаться на мои Telegram-каналы <a href="https://t.me/sdelkazasdelkoi">«Сделка за сделкой»</a> и <a href="https://t.me/razborprodaj">«Разборы продаж»</a>.</p></div></div></section>"""
     body = f"""{crumbs}<section class="page-hero"><div class="wrap"><p class="eyebrow">Блог</p><h1>Разборы и статьи о продажах</h1>
-<p class="lead">Разборы реальных переписок, ответы на возражения и статьи о том, как устроить отдел продаж.</p></div></section>{listing}{offer_block()}"""
+<p class="lead">Разборы реальных переписок, ответы на возражения и статьи о том, как устроить отдел продаж.</p></div></section>{listing}
+<section class="blog-game"><div class="wrap">{game_block("div")}</div></section>{offer_block()}"""
     layout("blog/", "Блог о продажах", "Статьи и разборы о продажах, скриптах, возражениях и построении отдела продаж от Анастасии Гавриш.", body, cld)
 
 

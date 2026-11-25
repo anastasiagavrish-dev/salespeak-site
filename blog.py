@@ -14,6 +14,7 @@
   ::: tiles ... :::          – цифры «- **цифра** пояснение» плитками
   ::: tools ... :::          – инструменты «- **[Название](ссылка)** – текст» карточками
   ::: cta Заголовок ... :::  – фиолетовый блок с кнопкой на форму
+  ::: game :::               – блок игры-тренажера «Касса тает» со ссылкой
   ?? Вопрос + строки ответа  – частые вопросы (в конце файла)
 """
 import html, os, re
@@ -62,6 +63,16 @@ def load_posts(root):
         meta["minutes"] = max(1, round(words / 180))
         posts.append(meta)
     return sorted(posts, key=lambda p: p["date"], reverse=True)
+
+
+GAME_URL = "https://game.a-gavrish.com/"
+
+
+def game_block(tag="aside"):
+    """Блок игры-тренажера «Касса тает»: в статье и на странице блога."""
+    return f"""<{tag} class="p-game"><p class="p-label">Тренажер «Касса тает»</p><h3>Проверьте своих продавцов в игре</h3>
+<p>Если хотите проверить менеджеров прямо сейчас, дайте им пройти мой тренажер. Менеджер переписывается с пятью клиентами из вашей ниши – недвижимость, стоматология, спа, турагентство, B2B и другие. Каждый слитый клиент забирает деньги из кассы, а после каждого диалога нейросеть показывает ошибки и как стоило ответить.</p>
+<a class="btn" href="{GAME_URL}">Играть бесплатно</a></{tag}>"""
 
 
 class Render:
@@ -130,6 +141,8 @@ class Render:
                 t, rest = self.lead_split(it)
                 tools.append(f'<li><h3>{self.inline(t)}</h3><p>{self.inline(rest)}</p></li>')
             return f'<ul class="p-tools">{"".join(tools)}</ul>'
+        if kind == "game":
+            return game_block()
         inner = self.render(lines)
         if kind == "story":
             return f'<aside class="p-story"><p class="p-label">{E(label)}</p>{inner}</aside>'
