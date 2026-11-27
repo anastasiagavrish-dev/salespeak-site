@@ -123,6 +123,7 @@ git reset -q --hard origin/main
 if git diff --name-only "\$OLD" "\$NEW" | grep -q '^bot/'; then
   $APP-venv/bin/pip install -q -r $APP/bot/requirements.txt
   systemctl restart kassa-bot
+  systemctl try-restart razbor-bot 2>/dev/null || true
   echo "Бот обновлен до \$NEW"
 fi
 EOF
