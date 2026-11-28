@@ -15,6 +15,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 import owner as own
+import play_stats as PS
 from game_data import COUNTRIES, NICHES, niche
 
 log = logging.getLogger("kassa.web")
@@ -177,6 +178,7 @@ async def api_session(req):
         s["alias"], s["pid"] = alias, own.start_player(t["id"], uid, alias)
     SESSIONS[sid] = s
     save_sessions()
+    PS.start(sid, s)
     return web.json_response({"sid": sid, "nums": s["nums"], "niche": nid, "clients": [public_client(nc["clients"][i]) for i in s["pick"]], "team": {"title": t["title"]} if t else None,
                               "name": (user or {}).get("first_name", "")})
 
@@ -206,6 +208,7 @@ async def api_client(req):
     data = await req.json()
     s = session(req, data)
     g = game_of(s, data)
+    PS.touch(str(data.get("sid")), int(data.get("i", 0)), niche(s["niche"])["clients"][g.i]["name"], g.log)
     try:
         r = await K.llm_json(K.client_prompt(g), dict, K.MODEL_FAST, temperature=0.7, max_tokens=1500)
     except Exception as e:
@@ -245,6 +248,7 @@ async def api_review(req):
     merged = [dict(x, **(steps[k] if steps and k < len(steps) and isinstance(steps[k], dict) else {})) for k, x in enumerate(turns)] if steps is not None else None
     s["results"][g.i] = dict(lost=outcome != "meeting", v=v)
     save_sessions()
+    PS.dialog(str(data.get("sid")), int(data.get("i", 0)), niche(s["niche"])["clients"][g.i]["name"], outcome, v, g.log)
     if s["pid"]:
         try:
             own.save_result(s["pid"], g.i, dict(lost=outcome != "meeting", v=v, steps=merged or [], log=g.log))
@@ -322,6 +326,7 @@ async def api_finish(req):
         return web.json_response({"ok": True})
     s["finished"] = True
     save_sessions()
+    PS.finish(str(data.get("sid", "")))
     K.save_stats(SimpleNamespace(results=s["results"]))
     if s["team"] and s["pid"]:
         own.finish_player(s["pid"])

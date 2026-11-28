@@ -21,6 +21,7 @@ from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButto
                            MenuButtonWebApp, ReplyKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo)
 
 import owner as own
+import play_stats as PS
 from game_data import COUNTRIES, CLIENTS, DEFAULT_NUMBERS, FILES, MAX_TURNS, NICHES, PROJECT, niche
 
 TOKEN = os.environ.get("TG_BOT_TOKEN", "")
@@ -989,22 +990,77 @@ async def cmd_term(m: Message, command: CommandObject):
 
 
 @router.message(Command("stats"))
-async def cmd_stats(m: Message):
+async def cmd_stats(m: Message, command: CommandObject):
     if not is_admin(m.from_user):
         return
-    games, week = 0, 0
+    days = int(command.args) if (command.args or "").strip().isdigit() else 7
+    games = 0
     try:
         with open(os.path.join(DATA_DIR, "games.jsonl"), encoding="utf-8") as f:
-            for line in f:
-                games += 1
-                if json.loads(line).get("ts", 0) > time.time() - 7 * 86400:
-                    week += 1
+            games = sum(1 for _ in f)
     except FileNotFoundError:
         pass
     teams = own.db().execute("SELECT COUNT(*) FROM teams").fetchone()[0]
     pl = own.db().execute("SELECT COUNT(*) FROM players").fetchone()[0]
-    await m.answer(f"<b>Статистика</b>\nЗаконченных игр – {games}, за 7 дней – {week}\nОтделов – {teams}, менеджеров в отделах – {pl}\n"
-                   f"Оценка затрат на нейросеть – около ${games * 0.07:.2f} за все время (≈$0,07 за игру). Точные траты – platform.deepseek.com → Usage.")
+    await send_long(m.bot, m.chat.id, PS.summary(days) +
+                    f"\n\n<b>За все время</b>\nЗаконченных игр – {games}, отделов – {teams}, менеджеров в отделах – {pl}\n"
+                    f"Затраты на нейросеть – около ${games * 0.07:.2f} (≈$0,07 за игру), точно – platform.deepseek.com → Usage.\n\n"
+                    "/stats 30 – за 30 дней · /games – последние игры с перепиской · /export – все переписки файлом")
+
+
+def games_kb(offset):
+    rows = PS.recent(offset)
+    kb = [[InlineKeyboardButton(text=PS.button_text(x), callback_data=f"pg:{x['sid']}")] for x in rows]
+    if len(rows) == 10:
+        kb.append([InlineKeyboardButton(text="Еще раньше →", callback_data=f"pgm:{offset + 10}")])
+    return rows, InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+@router.message(Command("games"))
+async def cmd_games(m: Message):
+    if not is_admin(m.from_user):
+        return
+    rows, kb = games_kb(0)
+    if not rows:
+        await m.answer("Пока нет игр с перепиской. Статистика копится с момента обновления бота.")
+        return
+    await m.answer("<b>Последние игры</b>\nВ кнопке – дата, ниша, игрок, сколько клиентов доведено до цели из законченных переписок. "
+                   "✅ – дошел до итога, ⏸ – бросил на этом клиенте. Нажмите, чтобы прочитать переписки.", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("pgm:"))
+async def cb_games_more(q: CallbackQuery):
+    if not is_admin(q.from_user):
+        return await q.answer()
+    rows, kb = games_kb(int(q.data[4:]))
+    await q.answer()
+    await q.message.answer("Игры раньше:" if rows else "Больше игр нет.", reply_markup=kb if rows else None)
+
+
+@router.callback_query(F.data.startswith("pg:"))
+async def cb_game_view(q: CallbackQuery):
+    if not is_admin(q.from_user):
+        return await q.answer()
+    x = PS.game(q.data[3:])
+    await q.answer()
+    if not x:
+        await q.message.answer("Игра не найдена – возможно, старше 180 дней.")
+        return
+    for part in PS.transcript_parts(x):
+        await send_long(q.bot, q.message.chat.id, part)
+
+
+@router.message(Command("export"))
+async def cmd_export(m: Message, command: CommandObject):
+    if not is_admin(m.from_user):
+        return
+    days = int(command.args) if (command.args or "").strip().isdigit() else 7
+    doc, n = PS.export_html(days)
+    if not n:
+        await m.answer(f"За {days} дн. игр с перепиской нет.")
+        return
+    await m.answer_document(BufferedInputFile(doc.encode("utf-8"), filename=f"kassa-perepiski-{time.strftime('%Y-%m-%d')}.html"),
+                            caption=f"Переписки за {days} дн. – {n} игр. Откройте файл в браузере. /export 30 – за 30 дней.")
 
 
 @router.message(F.text)
